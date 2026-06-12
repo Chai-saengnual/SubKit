@@ -393,6 +393,54 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .empty-icon { font-size: 48px; margin-bottom: 16px; }
 .empty-state h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
 
+.loading-shell {
+  position: fixed;
+  inset: 0;
+  background: rgba(10,10,15,0.86);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2500;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.loading-shell.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.loading-card {
+  width: min(420px, calc(100vw - 32px));
+  background: var(--surface);
+  border: 1px solid var(--muted2);
+  border-radius: var(--radius);
+  padding: 28px 24px;
+  text-align: center;
+}
+.loading-spinner {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  border: 3px solid var(--muted2);
+  border-top-color: var(--cyan);
+  animation: spin 0.8s linear infinite;
+}
+.loading-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.loading-copy {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* â”€â”€â”€ MOBILE (â‰¤768px) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @media (max-width: 768px) {
   .sidebar { display: none; }
@@ -664,6 +712,14 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
             <button class="settings-select" id="auth-github-btn" onclick="signInWithGitHub()">Sign In with GitHub</button>
             <button class="settings-select" id="auth-signout-btn" onclick="signOut()" style="display:none">Sign Out</button>
           </div>
+          <div id="import-banner" style="display:none;background:var(--surface2);border:1px solid var(--muted2);border-radius:var(--radius-sm);padding:14px;margin-top:14px">
+            <div style="font-size:13px;font-weight:600;margin-bottom:6px">Local subscriptions found</div>
+            <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px" id="import-copy">You have subscriptions on this device that are not in cloud sync yet.</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn-save" id="import-local-btn" onclick="importLocalSubscriptions()">Import to Cloud</button>
+              <button class="settings-select" id="dismiss-import-btn" onclick="dismissImportBanner()">Not Now</button>
+            </div>
+          </div>
           <p style="font-size:11px;color:var(--muted);margin-top:12px" id="auth-feedback">Your existing local subscriptions will stay on this device until you sign in.</p>
         </div>
 
@@ -891,6 +947,13 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
+<div class="loading-shell" id="loading-shell">
+  <div class="loading-card">
+    <div class="loading-spinner"></div>
+    <div class="loading-title" id="loading-title">Loading SubKit</div>
+    <div class="loading-copy" id="loading-copy">Checking your session and bringing in the latest subscription data.</div>
+  </div>
+</div>
 
 <script>
 var SUPABASE_URL = 'https://hncffbdvniedxfkawjhl.supabase.co';
@@ -899,10 +962,12 @@ var PROD_APP_URL = 'https://subkit-ten.vercel.app/';
 var LOCAL_SUBS_KEY = 'subkit-subs-local';
 var LEGACY_SUBS_KEY = 'subkit-subs';
 var CLOUD_SYNC_FLAG_PREFIX = 'subkit-cloud-sync-';
+var CLOUD_IMPORT_DISMISSED_PREFIX = 'subkit-cloud-import-dismissed-';
 var supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 var subs = [];
 var currentUser = null;
+var isAppLoading = false;
 var selEmoji_ = '📺';
 var curDetail = null;
 var editId = null;
@@ -977,6 +1042,15 @@ function setButtonBusy(id, isBusy, busyText, idleText){
   button.style.pointerEvents = isBusy ? 'none' : '';
   if(busyText && idleText) button.textContent = isBusy ? busyText : idleText;
 }
+function setLoadingState(isLoading, title, copy){
+  isAppLoading = isLoading;
+  var shell = document.getElementById('loading-shell');
+  if(title) document.getElementById('loading-title').textContent = title;
+  if(copy) document.getElementById('loading-copy').textContent = copy;
+  shell.classList.toggle('show', isLoading);
+}
+function localSubsCount(){ return loadLocalSubs().length; }
+function importDismissKey(){ return currentUser ? CLOUD_IMPORT_DISMISSED_PREFIX + currentUser.id : ''; }
 
 function normalizeSub(row){
   return {
@@ -1028,6 +1102,25 @@ function setAuthFeedback(message, type){
   el.textContent = message;
   el.style.color = type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--green)' : 'var(--muted)';
 }
+function renderImportBanner(){
+  var banner = document.getElementById('import-banner');
+  var copy = document.getElementById('import-copy');
+  if(!banner){
+    return;
+  }
+  if(!currentUser){
+    banner.style.display = 'none';
+    return;
+  }
+  var localCount = localSubsCount();
+  var dismissed = importDismissKey() && localStorage.getItem(importDismissKey()) === '1';
+  if(!localCount || dismissed || subs.length){
+    banner.style.display = 'none';
+    return;
+  }
+  copy.textContent = 'You have ' + localCount + ' subscription' + (localCount === 1 ? '' : 's') + ' on this device that are not in cloud sync yet.';
+  banner.style.display = 'block';
+}
 function renderAuthState(){
   var title = document.getElementById('auth-status-title');
   var copy = document.getElementById('auth-status-copy');
@@ -1045,25 +1138,41 @@ function renderAuthState(){
     signOutBtn.style.display = 'none';
     setAuthFeedback('Your existing local subscriptions stay on this device until you sign in.', '');
   }
+  renderImportBanner();
 }
 async function syncLocalDraftToCloud(){
   if(!currentUser) return;
   var localSubs = loadLocalSubs();
   if(!localSubs.length) return;
   var flagKey = cloudSyncFlagKey();
-  if(flagKey && localStorage.getItem(flagKey)) return;
-  var existing = await supabaseClient.from('subscriptions').select('id', { count:'exact', head:true });
-  if(existing.error) throw existing.error;
-  if(existing.count && existing.count > 0){
-    localStorage.setItem(flagKey, 'skip');
-    return;
-  }
+  if(flagKey && localStorage.getItem(flagKey) === 'done') return;
   var payload = localSubs.map(function(sub){
     return Object.assign({ user_id: currentUser.id }, toDbPayload(sub));
   });
   var inserted = await supabaseClient.from('subscriptions').insert(payload);
   if(inserted.error) throw inserted.error;
   localStorage.setItem(flagKey, 'done');
+  if(importDismissKey()) localStorage.removeItem(importDismissKey());
+}
+async function importLocalSubscriptions(){
+  if(!currentUser) return;
+  setButtonBusy('import-local-btn', true, 'Importing...', 'Import to Cloud');
+  try {
+    setLoadingState(true, 'Importing local subscriptions', 'Saving your device data into your cloud account.');
+    await syncLocalDraftToCloud();
+    await loadSubscriptions();
+    toast('Local subscriptions imported to cloud', 'success');
+  } catch (error) {
+    toast('Could not import local subscriptions', 'error');
+  } finally {
+    setLoadingState(false);
+    setButtonBusy('import-local-btn', false, 'Importing...', 'Import to Cloud');
+    renderImportBanner();
+  }
+}
+function dismissImportBanner(){
+  if(importDismissKey()) localStorage.setItem(importDismissKey(), '1');
+  renderImportBanner();
 }
 async function loadSubscriptions(){
   if(currentUser){
@@ -1081,6 +1190,7 @@ async function loadSubscriptions(){
   }
   renderAll();
   renderCalendar();
+  renderImportBanner();
 }
 
 function switchTab(tab, btn){
@@ -1715,22 +1825,21 @@ async function signOut(){
   setAuthFeedback('Signed out. Local subscriptions are available again on this device.', 'success');
 }
 async function initAuth(){
+  setLoadingState(true, 'Loading SubKit', 'Checking your session and bringing in the latest subscription data.');
   renderAuthState();
   var sessionResult = await supabaseClient.auth.getSession();
   currentUser = sessionResult.data.session ? sessionResult.data.session.user : null;
   renderAuthState();
-  if(currentUser){
-    try { await syncLocalDraftToCloud(); } catch (error) {}
-  }
   await loadSubscriptions();
+  setLoadingState(false);
   supabaseClient.auth.onAuthStateChange(function(_event, session){
     currentUser = session ? session.user : null;
+    setLoadingState(true, currentUser ? 'Syncing your account' : 'Returning to local mode', currentUser ? 'Loading your cloud subscriptions.' : 'Switching back to subscriptions saved on this device.');
     renderAuthState();
     Promise.resolve()
-      .then(function(){ return currentUser ? syncLocalDraftToCloud() : null; })
-      .catch(function(){})
       .then(function(){ return loadSubscriptions(); })
-      .catch(function(){ toast('Could not refresh subscriptions', 'error'); });
+      .catch(function(){ toast('Could not refresh subscriptions', 'error'); })
+      .finally(function(){ setLoadingState(false); });
   });
 }
 
