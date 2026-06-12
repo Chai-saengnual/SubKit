@@ -1390,7 +1390,8 @@ async function saveSub(){
     toast(editId ? '✓ '+name+' updated!' : '✓ '+name+' added!', 'success');
     resetAddForm();
   } catch (error) {
-    toast('Could not save subscription', 'error');
+    console.error('saveSub failed', error);
+    toast('Could not save subscription: ' + (error && (error.message || error.details || error.hint) ? (error.message || error.details || error.hint) : 'unknown error'), 'error');
   }
 }
 
