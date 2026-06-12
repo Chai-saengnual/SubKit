@@ -400,6 +400,22 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .info-box-value { font-size: 15px; font-weight: 600; }
 .btn-danger { background: transparent; color: var(--danger); border: 1px solid rgba(255,95,122,0.3); border-radius: var(--radius-sm); padding: 11px 20px; font-family: 'DM Sans', sans-serif; font-size: 14px; cursor: pointer; width: 100%; margin-top: 4px; }
 
+/* INVOICES */
+.invoice-section { margin-bottom: 14px; }
+.invoice-section-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.invoice-item { display: flex; align-items: center; gap: 10px; background: var(--surface2); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 6px; }
+.invoice-item-icon { font-size: 20px; flex-shrink: 0; }
+.invoice-item-info { flex: 1; min-width: 0; }
+.invoice-item-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.invoice-item-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.invoice-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.invoice-btn { background: none; border: 1px solid var(--muted2); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; color: var(--text); }
+.invoice-btn:hover { border-color: var(--accent); color: var(--accent); }
+.invoice-btn.del { color: var(--danger); border-color: rgba(255,95,122,0.3); }
+.invoice-btn.del:hover { background: rgba(255,95,122,0.1); }
+.invoice-upload-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 11px; background: none; border: 1px dashed var(--muted2); border-radius: var(--radius-sm); color: var(--muted); font-size: 13px; cursor: pointer; transition: border-color 0.15s, color 0.15s; margin-bottom: 0; }
+.invoice-upload-btn:hover { border-color: var(--accent); color: var(--accent); }
+
 /* EXPORT */
 .export-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 .export-btn { background: var(--surface2); border: 1px solid var(--muted2); border-radius: var(--radius-sm); padding: 16px 12px; text-align: center; cursor: pointer; transition: border-color 0.15s; }
@@ -986,6 +1002,19 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
       </div>
     </div>
     <button id="mark-renewed-btn" class="btn-secondary" style="margin-bottom:10px;width:100%" onclick="markAsRenewed()">✓ Mark as Renewed — advance to next cycle</button>
+
+    <!-- INVOICES -->
+    <div class="invoice-section">
+      <div class="invoice-section-label">📎 Invoices &amp; Receipts</div>
+      <div id="d-invoice-list"></div>
+      <label class="invoice-upload-btn" id="invoice-upload-label">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload PDF or Image
+        <input type="file" id="invoice-file-input" accept=".pdf,image/*" style="display:none" onchange="uploadInvoice(this)">
+      </label>
+      <div id="invoice-signin-msg" style="display:none;font-size:12px;color:var(--muted);text-align:center;padding:10px 0">Sign in to upload &amp; store invoices</div>
+    </div>
+
     <div class="modal-actions">
       <button class="btn-secondary" onclick="editCurrentSub()">Edit</button>
       <button class="btn-danger" onclick="deleteSub()">🗑 Remove</button>
@@ -1742,7 +1771,19 @@ function openDetail(id){
   document.getElementById('d-prog').className='progress-fill'+(days!==null&&days<=3?' danger':days!==null&&days<=7?' warn':'');
   document.getElementById('d-glance').textContent='= '+Math.max(1, coffees(moUSD(sub)))+' Coffee ☕ / month';
   document.getElementById('d-glance-row').style.display = coffeeMode ? '' : 'none';
+  // Invoices section
+  var uploadLabel = document.getElementById('invoice-upload-label');
+  var signinMsg  = document.getElementById('invoice-signin-msg');
+  if(currentUser){
+    uploadLabel.style.display = '';
+    signinMsg.style.display   = 'none';
+  } else {
+    uploadLabel.style.display = 'none';
+    signinMsg.style.display   = '';
+  }
+  document.getElementById('d-invoice-list').innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 0">Loading…</div>';
   document.getElementById('detail-modal').classList.add('open');
+  loadInvoices(id);
 }
 function editCurrentSub(){ if(curDetail) openEditModal(curDetail); }
 async function deleteSub(){
@@ -1789,6 +1830,119 @@ async function markAsRenewed(){
     setButtonBusy('mark-renewed-btn', false, 'Updating...', '✓ Mark as Renewed — advance to next cycle');
   }
 }
+
+/* ── INVOICES ─────────────────────────────────────────────── */
+function fmtBytes(bytes){
+  if(!bytes) return '';
+  if(bytes < 1024) return bytes+'B';
+  if(bytes < 1048576) return (bytes/1024).toFixed(0)+'KB';
+  return (bytes/1048576).toFixed(1)+'MB';
+}
+function invoiceIcon(ct){
+  if(!ct) return '📄';
+  if(ct==='application/pdf') return '📑';
+  if(ct.startsWith('image/')) return '🖼';
+  return '📄';
+}
+
+async function loadInvoices(subId){
+  var el = document.getElementById('d-invoice-list');
+  if(!el) return;
+  if(!currentUser){
+    el.innerHTML = '';
+    return;
+  }
+  try {
+    var res = await supabaseClient
+      .from('subscription_invoices')
+      .select('*')
+      .eq('subscription_id', subId)
+      .order('uploaded_at', { ascending: false });
+    if(res.error) throw res.error;
+    var rows = res.data || [];
+    if(!rows.length){
+      el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 0 8px">No invoices yet.</div>';
+      return;
+    }
+    el.innerHTML = rows.map(function(inv){
+      var dt = new Date(inv.uploaded_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      return '<div class="invoice-item">'+
+        '<div class="invoice-item-icon">'+invoiceIcon(inv.content_type)+'</div>'+
+        '<div class="invoice-item-info">'+
+          '<div class="invoice-item-name" title="'+esc(inv.file_name)+'">'+esc(inv.file_name)+'</div>'+
+          '<div class="invoice-item-meta">'+dt+(inv.file_size?' · '+fmtBytes(inv.file_size):'')+'</div>'+
+        '</div>'+
+        '<div class="invoice-item-actions">'+
+          '<button class="invoice-btn" onclick="viewInvoice(\''+esc(inv.file_path)+'\')">View</button>'+
+          '<button class="invoice-btn del" onclick="deleteInvoice(\''+esc(inv.id)+'\',\''+esc(inv.file_path)+'\')">✕</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  } catch(e){
+    el.innerHTML = '<div style="font-size:12px;color:var(--danger)">Failed to load invoices</div>';
+  }
+}
+
+async function viewInvoice(filePath){
+  if(!currentUser) return;
+  try {
+    var res = await supabaseClient.storage.from('invoices').createSignedUrl(filePath, 3600);
+    if(res.error) throw res.error;
+    window.open(res.data.signedUrl, '_blank');
+  } catch(e){
+    toast('Could not open file', 'error');
+  }
+}
+
+async function uploadInvoice(input){
+  if(!input.files || !input.files[0]) return;
+  if(!currentUser){ toast('Sign in to upload invoices', 'error'); return; }
+  if(!curDetail){ return; }
+  var file = input.files[0];
+  input.value = '';
+  if(file.size > 10 * 1024 * 1024){
+    toast('File too large — max 10 MB', 'error');
+    return;
+  }
+  var safeName = file.name.replace(/[^a-zA-Z0-9._\-]/g, '_');
+  var filePath = currentUser.id + '/' + curDetail + '/' + Date.now() + '_' + safeName;
+  var lbl = document.getElementById('invoice-upload-label');
+  if(lbl){ lbl.style.opacity = '0.5'; lbl.style.pointerEvents = 'none'; }
+  try {
+    var upRes = await supabaseClient.storage.from('invoices').upload(filePath, file, { contentType: file.type });
+    if(upRes.error) throw upRes.error;
+    var insRes = await supabaseClient.from('subscription_invoices').insert({
+      subscription_id: curDetail,
+      user_id: currentUser.id,
+      file_name: file.name,
+      file_path: filePath,
+      file_size: file.size,
+      content_type: file.type
+    });
+    if(insRes.error) throw insRes.error;
+    toast('📎 Invoice uploaded', 'success');
+    loadInvoices(curDetail);
+  } catch(e){
+    toast('Upload failed: '+(e.message||e), 'error');
+  } finally {
+    if(lbl){ lbl.style.opacity = ''; lbl.style.pointerEvents = ''; }
+  }
+}
+
+async function deleteInvoice(invId, filePath){
+  if(!currentUser) return;
+  if(!confirm('Remove this invoice?')) return;
+  try {
+    await supabaseClient.storage.from('invoices').remove([filePath]);
+    var del = await supabaseClient.from('subscription_invoices').delete().eq('id', invId);
+    if(del.error) throw del.error;
+    toast('Invoice removed', 'success');
+    loadInvoices(curDetail);
+  } catch(e){
+    toast('Could not delete invoice', 'error');
+  }
+}
+/* ── /INVOICES ────────────────────────────────────────────── */
 
 function openExportModal(){
   document.getElementById('export-status').textContent='';
