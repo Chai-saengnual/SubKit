@@ -735,8 +735,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
             <button class="settings-select" onclick="openCurrencyModal()" style="cursor:pointer">Change</button>
           </div>
           <div class="settings-row">
-            <div><div class="settings-row-label">Coffee Mode</div><div class="settings-row-desc">Show as coffees</div></div>
-            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+            <div><div class="settings-row-label">Coffee Mode</div><div class="settings-row-desc">Show spend as ☕ coffees</div></div>
+            <div class="toggle on" id="coffee-toggle" onclick="toggleCoffeeMode()"></div>
           </div>
         </div>
 
@@ -854,8 +854,9 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
   <button class="m-nav-center" onclick="openAddModal()">
     <svg width="22" height="22" fill="none" stroke="#0a0a0f" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
   </button>
-  <button class="m-nav-btn" onclick="switchTab('analytics',this)" data-tab="analytics">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="22" height="22"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Analytics
+  <button class="m-nav-btn" onclick="switchTab('reminders',this)" data-tab="reminders" style="position:relative">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="22" height="22"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+    <span id="mob-remind-badge" class="badge-count" style="background:var(--warn);display:none;position:absolute;top:4px;right:8px;font-size:9px;padding:1px 4px;border-radius:6px">!</span>Reminders
   </button>
   <button class="m-nav-btn" onclick="switchTab('settings',this)" data-tab="settings">
     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings
@@ -972,14 +973,14 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
         <div class="progress-bar" style="margin-top:8px"><div class="progress-fill" id="d-prog" style="width:0%"></div></div>
       </div>
     </div>
-    <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
+    <div id="d-glance-row" style="background:var(--surface2);border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;display:flex;align-items:center;gap:12px">
 <span style="font-size:24px">✨</span>
       <div>
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px">At a glance</div>
 <div style="font-size:14px;font-weight:600" id="d-glance">-</div>
       </div>
     </div>
-    <button class="btn-secondary" style="margin-bottom:10px;width:100%" onclick="markAsRenewed()">✓ Mark as Renewed — advance to next cycle</button>
+    <button id="mark-renewed-btn" class="btn-secondary" style="margin-bottom:10px;width:100%" onclick="markAsRenewed()">✓ Mark as Renewed — advance to next cycle</button>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="editCurrentSub()">Edit</button>
       <button class="btn-danger" onclick="deleteSub()">🗑 Remove</button>
@@ -1041,6 +1042,7 @@ var C = {
 };
 var disp = localStorage.getItem('subkit-currency') || 'USD';
 var live = null;
+var coffeeMode = localStorage.getItem('subkit-coffeemode') !== '0';
 
 var pageTitles = {home:'Dashboard',subs:'Subscriptions',calendar:'Calendar',analytics:'Analytics',reminders:'Reminders',settings:'Settings'};
 var pageSubs = {home:'Overview of all your subscriptions',subs:'Manage all your tracked services',calendar:'Renewal calendar',analytics:'Spending breakdown & insights',reminders:'Email reminder configuration',settings:'App preferences & configuration'};
@@ -1336,6 +1338,17 @@ function updateBadges(){
   var rb = document.getElementById('remind-badge');
   rb.textContent = soon;
   rb.style.display = soon ? '' : 'none';
+  var mrb = document.getElementById('mob-remind-badge');
+  if(mrb){ mrb.textContent = soon; mrb.style.display = soon ? '' : 'none'; }
+}
+function toggleCoffeeMode(){
+  coffeeMode = !coffeeMode;
+  localStorage.setItem('subkit-coffeemode', coffeeMode ? '1' : '0');
+  var tog = document.getElementById('coffee-toggle');
+  if(tog) coffeeMode ? tog.classList.add('on') : tog.classList.remove('on');
+  var pill = document.getElementById('coffee-pill');
+  if(pill) pill.style.display = coffeeMode ? '' : 'none';
+  renderAll();
 }
 function renderHome(){
   var total=totUSD();
@@ -1344,7 +1357,9 @@ function renderHome(){
   document.getElementById('total-display').textContent = fmtD(total);
   document.getElementById('stat-count').textContent = subs.length;
   document.getElementById('stat-annual').textContent = fmtD(total * 12);
-  document.getElementById('coffee-pill').textContent = '= ' + coffees(total) + ' Coffee ☕';
+  var cpill = document.getElementById('coffee-pill');
+  cpill.textContent = '= ' + coffees(total) + ' Coffee ☕';
+  cpill.style.display = coffeeMode ? '' : 'none';
   document.getElementById('rate-pill').textContent = '💱 ' + disp + ' (1 USD ≈ ' + rateText + ')';
   document.getElementById('stat-soon').textContent = subs.filter(function(s){ var days=dL(s); return days!==null && days>=0 && days<=7; }).length;
 
@@ -1712,6 +1727,7 @@ function openDetail(id){
   document.getElementById('d-prog').style.width=pct+'%';
   document.getElementById('d-prog').className='progress-fill'+(days!==null&&days<=3?' danger':days!==null&&days<=7?' warn':'');
   document.getElementById('d-glance').textContent='= '+Math.max(1, coffees(moUSD(sub)))+' Coffee ☕ / month';
+  document.getElementById('d-glance-row').style.display = coffeeMode ? '' : 'none';
   document.getElementById('detail-modal').classList.add('open');
 }
 function editCurrentSub(){ if(curDetail) openEditModal(curDetail); }
@@ -1741,6 +1757,7 @@ async function markAsRenewed(){
   var sub = subs.find(function(s){ return s.id===curDetail; });
   if(!sub || !sub.nextDate) return;
   var newDate = advanceDate(sub.nextDate, sub.cycle);
+  setButtonBusy('mark-renewed-btn', true, 'Updating...', '✓ Mark as Renewed — advance to next cycle');
   try {
     if(currentUser){
       var res = await supabaseClient.from('subscriptions').update({ next_date: newDate }).eq('id', sub.id);
@@ -1754,6 +1771,8 @@ async function markAsRenewed(){
     toast('✓ '+sub.name+' renewed → '+new Date(newDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}), 'success');
   } catch(error){
     toast('Could not update renewal date', 'error');
+  } finally {
+    setButtonBusy('mark-renewed-btn', false, 'Updating...', '✓ Mark as Renewed — advance to next cycle');
   }
 }
 
@@ -2110,10 +2129,16 @@ if('serviceWorker' in navigator){
 }
 
 fetchRates();
+// Sync coffee mode toggle visual to persisted state
+(function(){
+  var tog = document.getElementById('coffee-toggle');
+  if(tog){ coffeeMode ? tog.classList.add('on') : tog.classList.remove('on'); }
+})();
 renderAll();
 renderCalendar();
 initAuth().then(function(){
   setTimeout(checkAndSendReminders, 2000);
+  setInterval(checkAndSendReminders, 4 * 60 * 60 * 1000);
 }).catch(function(){
   toast('Supabase setup needs one more check', 'error');
 });
