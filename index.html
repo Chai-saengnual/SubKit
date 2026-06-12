@@ -913,6 +913,10 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
       </div>
     </div>
     <div class="form-group">
+      <label class="form-label">Account <span style="color:var(--muted);font-weight:400">(optional — email or label)</span></label>
+      <input class="form-input" type="text" id="sub-account" placeholder="you@gmail.com or Personal" />
+    </div>
+    <div class="form-group">
       <label class="form-label">Price &amp; Currency</label>
       <div class="price-row">
         <div style="position:relative;flex:1">
@@ -967,6 +971,7 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
 <div class="info-box"><div class="info-box-label">Next Charge</div><div class="info-box-value" id="d-next">-</div></div>
 <div class="info-box"><div class="info-box-label">Days Left</div><div class="info-box-value" id="d-days">-</div></div>
 <div class="info-box"><div class="info-box-label">Category</div><div class="info-box-value" id="d-cat">-</div></div>
+<div class="info-box" id="d-account-box"><div class="info-box-label">Account</div><div class="info-box-value" id="d-account" style="font-size:12px;word-break:break-all">-</div></div>
       <div class="info-box">
         <div class="info-box-label">Period Elapsed</div>
 <div class="info-box-value" id="d-pct">-</div>
@@ -1150,6 +1155,7 @@ function normalizeSub(row){
     nextDate: row.next_date || row.nextDate || '',
     category: row.category || 'Other',
     emoji: row.emoji || '📺',
+    account: row.account || '',
     _lastRemind: row.last_remind || row._lastRemind || null
   };
 }
@@ -1162,6 +1168,7 @@ function toDbPayload(sub){
     next_date: sub.nextDate || null,
     category: sub.category || 'Other',
     emoji: sub.emoji || '📺',
+    account: sub.account || null,
     last_remind: sub._lastRemind || null
   };
 }
@@ -1310,7 +1317,8 @@ function filteredSubsList(){
       sub.name || '',
       sub.category || '',
       sub.currency || '',
-      sub.cycle || ''
+      sub.cycle || '',
+      sub.account || ''
     ].join(' ').toLowerCase().indexOf(query) !== -1;
   });
   return list.slice().sort(function(a, b){
@@ -1400,7 +1408,7 @@ function renderSubListEl(elId, list){
     var dateStr = sub.nextDate ? new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '-';
     return '<div class="sub-row" onclick="openDetail(\''+esc(sub.id)+'\')">'+
       '<div class="sub-row-icon">'+esc(sub.emoji)+'</div>'+
-      '<div><div class="sub-row-name">'+esc(sub.name)+'</div><div class="sub-row-cat">'+esc(sub.category)+'</div></div>'+
+      '<div><div class="sub-row-name">'+esc(sub.name)+'</div><div class="sub-row-cat">'+esc(sub.category)+(sub.account?'<span style="margin-left:6px;color:var(--accent);font-size:10px;opacity:.8">'+esc(sub.account)+'</span>':'')+'</div></div>'+
       '<div><div class="sub-row-price">'+fmtD(moUSD(sub))+'/mo</div>'+(sc!==disp?'<div class="sub-row-orig">'+fmtO(sub.price,sc)+'</div>':'')+'</div>'+
       '<div class="sub-row-date">'+dateStr+(days!==null?'<br><span class="badge '+fillClass+'" style="margin-top:4px">'+days+'d</span>':'')+'</div>'+
       '<div class="sub-row-bar"><div class="sub-row-days">'+pct+'% elapsed</div><div class="progress-bar"><div class="progress-fill '+fillClass+'" style="width:'+pct+'%"></div></div></div>'+
@@ -1600,6 +1608,7 @@ function resetAddForm(){
   document.getElementById('sub-name').value='';
   document.getElementById('sub-price').value='';
   document.getElementById('sub-category').value='Entertainment';
+  document.getElementById('sub-account').value='';
   document.getElementById('sub-currency').value=disp in C ? disp : 'USD';
   document.getElementById('sub-cycle').value='monthly';
   document.getElementById('sub-date').value=d.toISOString().split('T')[0];
@@ -1629,6 +1638,7 @@ function openEditModal(id){
   document.getElementById('sub-name').value=sub.name||'';
   document.getElementById('sub-price').value=sub.price;
   document.getElementById('sub-category').value=sub.category||'Other';
+  document.getElementById('sub-account').value=sub.account||'';
   document.getElementById('sub-currency').value=sub.currency||'USD';
   document.getElementById('sub-cycle').value=sub.cycle||'monthly';
   document.getElementById('sub-date').value=sub.nextDate||'';
@@ -1656,6 +1666,7 @@ async function saveSub(){
   var cycle=document.getElementById('sub-cycle').value;
   var date=document.getElementById('sub-date').value;
   var category=document.getElementById('sub-category').value;
+  var account=document.getElementById('sub-account').value.trim();
   if(!name || Number.isNaN(price) || price < 0){
     toast('Please enter a valid name and price', 'error');
     return;
@@ -1669,7 +1680,7 @@ async function saveSub(){
     return;
   }
 
-  var payload={name:name,price:price,currency:currency,cycle:cycle,nextDate:date,category:category,emoji:selEmoji_};
+  var payload={name:name,price:price,currency:currency,cycle:cycle,nextDate:date,category:category,emoji:selEmoji_,account:account};
   setButtonBusy('add-submit-btn', true, editId ? 'Saving...' : 'Adding...', editId ? 'Save Changes' : 'Add Subscription');
   try {
     if(currentUser){
@@ -1721,6 +1732,9 @@ function openDetail(id){
   document.getElementById('d-orig-price').textContent=fmtO(sub.price,sc);
   document.getElementById('d-cycle').textContent=cap(sub.cycle);
   document.getElementById('d-cat').textContent=sub.category;
+  var dab = document.getElementById('d-account-box');
+  document.getElementById('d-account').textContent=sub.account||'-';
+  if(dab) dab.style.display = sub.account ? '' : 'none';
   document.getElementById('d-next').textContent=sub.nextDate?new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'-';
   document.getElementById('d-days').innerHTML=days!==null?'<span class="badge '+badgeClass+'">in '+days+' days</span>':'-';
   document.getElementById('d-pct').textContent=pct+'% elapsed';
@@ -1792,12 +1806,12 @@ function dlFile(name, content, type){
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 function exportCSV(){
-  var rows=['Name,Original Price,Currency,Monthly ('+disp+'),Cycle,Next Date,Category'];
+  var rows=['Name,Account,Original Price,Currency,Monthly ('+disp+'),Cycle,Next Date,Category'];
   subs.forEach(function(sub){
-    rows.push(['"'+String(sub.name).replace(/"/g, '""')+'"', sub.price, sub.currency||'USD', fmtD(moUSD(sub)).replace(',',''), sub.cycle, sub.nextDate||'', '"'+String(sub.category).replace(/"/g, '""')+'"'].join(','));
+    rows.push(['"'+String(sub.name).replace(/"/g,'""')+'"', '"'+String(sub.account||'').replace(/"/g,'""')+'"', sub.price, sub.currency||'USD', fmtD(moUSD(sub)).replace(',',''), sub.cycle, sub.nextDate||'', '"'+String(sub.category).replace(/"/g,'""')+'"'].join(','));
   });
   rows.push('');
-  rows.push('"TOTAL",,,"'+fmtD(totUSD())+'",,,');
+  rows.push('"TOTAL",,,,"'+fmtD(totUSD())+'",,,');
   dlFile('subkit-export.csv', rows.join('\n'), 'text/csv');
   document.getElementById('export-status').textContent='✓ CSV downloaded!';
 }
