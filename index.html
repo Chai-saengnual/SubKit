@@ -659,9 +659,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
             <input class="settings-input" type="password" id="auth-password" placeholder="At least 6 characters" />
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <button class="btn-save" onclick="signUp()">Create Account</button>
-            <button class="btn-test" onclick="signIn()">Sign In</button>
-            <button class="settings-select" onclick="signInWithGitHub()">Sign In with GitHub</button>
+            <button class="btn-save" id="auth-signup-btn" onclick="signUp()">Create Account</button>
+            <button class="btn-test" id="auth-signin-btn" onclick="signIn()">Sign In</button>
+            <button class="settings-select" id="auth-github-btn" onclick="signInWithGitHub()">Sign In with GitHub</button>
             <button class="settings-select" id="auth-signout-btn" onclick="signOut()" style="display:none">Sign Out</button>
           </div>
           <p style="font-size:11px;color:var(--muted);margin-top:12px" id="auth-feedback">Your existing local subscriptions will stay on this device until you sign in.</p>
@@ -683,7 +683,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 <div class="settings-section-title">📧 Email Reminders (via EmailJS)</div>
           <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">
 SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal reminders directly from your browser - no server needed.
-            Create a free account at <a href="https://emailjs.com" target="_blank" style="color:var(--cyan)">emailjs.com</a>, then paste your keys below.
+            Create a free account at <a href="https://emailjs.com" target="_blank" rel="noopener noreferrer" style="color:var(--cyan)">emailjs.com</a>, then paste your keys below.
           </p>
 
           <div class="form-row">
@@ -823,6 +823,7 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
         <label class="form-label">Billing Cycle</label>
         <select class="form-select" id="sub-cycle">
           <option value="monthly">Monthly</option>
+          <option value="quarterly">Quarterly</option>
           <option value="yearly">Yearly</option>
           <option value="weekly">Weekly</option>
         </select>
@@ -968,6 +969,14 @@ function loadLocalSubs(){
 }
 function saveLocalSubs(items){ localStorage.setItem(LOCAL_SUBS_KEY, JSON.stringify(items)); }
 function save(){ saveLocalSubs(subs); }
+function setButtonBusy(id, isBusy, busyText, idleText){
+  var button = document.getElementById(id);
+  if(!button) return;
+  button.disabled = isBusy;
+  button.style.opacity = isBusy ? '0.7' : '';
+  button.style.pointerEvents = isBusy ? 'none' : '';
+  if(busyText && idleText) button.textContent = isBusy ? busyText : idleText;
+}
 
 function normalizeSub(row){
   return {
@@ -994,19 +1003,6 @@ function toDbPayload(sub){
     last_remind: sub._lastRemind || null
   };
 }
-function seedLocalSubs(){
-  if(loadLocalSubs().length) return;
-  var now = new Date();
-  function d(offset){ var r=new Date(now); r.setDate(r.getDate()+offset); return r.toISOString().split('T')[0]; }
-  saveLocalSubs([
-    {id:'1',name:'Netflix',emoji:'📺',price:379,currency:'THB',cycle:'monthly',nextDate:d(9),category:'Entertainment'},
-    {id:'2',name:'Apple Developer',emoji:'🍎',price:99,currency:'USD',cycle:'yearly',nextDate:d(275),category:'Productivity'},
-    {id:'3',name:'Cursor',emoji:'👨‍💻',price:60,currency:'USD',cycle:'monthly',nextDate:d(12),category:'AI Tools'},
-    {id:'4',name:'YouTube',emoji:'▶️',price:17.98,currency:'USD',cycle:'monthly',nextDate:d(30),category:'Entertainment'},
-    {id:'5',name:'iCloud',emoji:'☁️',price:139,currency:'THB',cycle:'monthly',nextDate:d(29),category:'Utilities'}
-  ]);
-}
-
 function fetchRates(){
   var cached=localStorage.getItem('subkit-rates');
   var ts=parseInt(localStorage.getItem('subkit-rates-ts') || '0', 10);
@@ -1081,7 +1077,6 @@ async function loadSubscriptions(){
     }
     subs = result.data.map(normalizeSub);
   } else {
-    seedLocalSubs();
     subs = loadLocalSubs();
   }
   renderAll();
@@ -1357,12 +1352,21 @@ async function saveSub(){
   var cycle=document.getElementById('sub-cycle').value;
   var date=document.getElementById('sub-date').value;
   var category=document.getElementById('sub-category').value;
-  if(!name || Number.isNaN(price)){
-    toast('Please fill in name and price', 'error');
+  if(!name || Number.isNaN(price) || price < 0){
+    toast('Please enter a valid name and price', 'error');
+    return;
+  }
+  if(!date){
+    toast('Please choose the next renewal date', 'error');
+    return;
+  }
+  if(['weekly','monthly','quarterly','yearly'].indexOf(cycle) === -1){
+    toast('Please choose a valid billing cycle', 'error');
     return;
   }
 
   var payload={name:name,price:price,currency:currency,cycle:cycle,nextDate:date,category:category,emoji:selEmoji_};
+  setButtonBusy('add-submit-btn', true, editId ? 'Saving...' : 'Adding...', editId ? 'Save Changes' : 'Add Subscription');
   try {
     if(currentUser){
       if(editId){
@@ -1392,6 +1396,8 @@ async function saveSub(){
   } catch (error) {
     console.error('saveSub failed', error);
     toast('Could not save subscription: ' + (error && (error.message || error.details || error.hint) ? (error.message || error.details || error.hint) : 'unknown error'), 'error');
+  } finally {
+    setButtonBusy('add-submit-btn', false, editId ? 'Saving...' : 'Adding...', editId ? 'Save Changes' : 'Add Subscription');
   }
 }
 
@@ -1652,12 +1658,17 @@ async function signUp(){
     setAuthFeedback('Use a real email and a password with at least 6 characters.', 'error');
     return;
   }
-  var result = await supabaseClient.auth.signUp({ email: creds.email, password: creds.password });
-  if(result.error){
-    setAuthFeedback(result.error.message, 'error');
-    return;
+  setButtonBusy('auth-signup-btn', true, 'Creating...', 'Create Account');
+  try {
+    var result = await supabaseClient.auth.signUp({ email: creds.email, password: creds.password });
+    if(result.error){
+      setAuthFeedback(result.error.message, 'error');
+      return;
+    }
+    setAuthFeedback(result.data.session ? 'Account created and signed in.' : 'Account created. Check your inbox if email confirmation is enabled.', 'success');
+  } finally {
+    setButtonBusy('auth-signup-btn', false, 'Creating...', 'Create Account');
   }
-  setAuthFeedback(result.data.session ? 'Account created and signed in.' : 'Account created. Check your inbox if email confirmation is enabled.', 'success');
 }
 async function signIn(){
   var creds=authCreds();
@@ -1665,25 +1676,35 @@ async function signIn(){
     setAuthFeedback('Enter both email and password to sign in.', 'error');
     return;
   }
-  var result = await supabaseClient.auth.signInWithPassword({ email: creds.email, password: creds.password });
-  if(result.error){
-    setAuthFeedback(result.error.message, 'error');
-    return;
+  setButtonBusy('auth-signin-btn', true, 'Signing in...', 'Sign In');
+  try {
+    var result = await supabaseClient.auth.signInWithPassword({ email: creds.email, password: creds.password });
+    if(result.error){
+      setAuthFeedback(result.error.message, 'error');
+      return;
+    }
+    setAuthFeedback('Signed in. Loading your cloud subscriptions...', 'success');
+  } finally {
+    setButtonBusy('auth-signin-btn', false, 'Signing in...', 'Sign In');
   }
-  setAuthFeedback('Signed in. Loading your cloud subscriptions...', 'success');
 }
 async function signInWithGitHub(){
-  var result = await supabaseClient.auth.signInWithOAuth({
-    provider: 'github',
-    options: {
-      redirectTo: getAuthRedirectUrl()
+  setButtonBusy('auth-github-btn', true, 'Redirecting...', 'Sign In with GitHub');
+  try {
+    var result = await supabaseClient.auth.signInWithOAuth({
+      provider: 'github',
+      options: {
+        redirectTo: getAuthRedirectUrl()
+      }
+    });
+    if(result.error){
+      setAuthFeedback(result.error.message, 'error');
+      return;
     }
-  });
-  if(result.error){
-    setAuthFeedback(result.error.message, 'error');
-    return;
+    setAuthFeedback('Redirecting to GitHub sign-in...', 'success');
+  } finally {
+    setButtonBusy('auth-github-btn', false, 'Redirecting...', 'Sign In with GitHub');
   }
-  setAuthFeedback('Redirecting to GitHub sign-in...', 'success');
 }
 async function signOut(){
   var result = await supabaseClient.auth.signOut();
