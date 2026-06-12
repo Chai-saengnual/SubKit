@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -644,6 +645,29 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
         </div>
 
         <div class="settings-section">
+          <div class="settings-section-title">Cloud Sync</div>
+          <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:16px;margin-bottom:14px">
+            <div style="font-size:13px;font-weight:600;margin-bottom:6px" id="auth-status-title">Local-only mode</div>
+            <div style="font-size:12px;color:var(--muted);line-height:1.6" id="auth-status-copy">Sign in to store subscriptions in Supabase and sync them across devices.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input class="settings-input" type="email" id="auth-email" placeholder="you@email.com" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input class="settings-input" type="password" id="auth-password" placeholder="At least 6 characters" />
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn-save" onclick="signUp()">Create Account</button>
+            <button class="btn-test" onclick="signIn()">Sign In</button>
+            <button class="settings-select" onclick="signInWithGitHub()">Sign In with GitHub</button>
+            <button class="settings-select" id="auth-signout-btn" onclick="signOut()" style="display:none">Sign Out</button>
+          </div>
+          <p style="font-size:11px;color:var(--muted);margin-top:12px" id="auth-feedback">Your existing local subscriptions will stay on this device until you sign in.</p>
+        </div>
+
+        <div class="settings-section">
           <div class="settings-section-title">Data</div>
           <div class="settings-row">
             <div><div class="settings-row-label">Export Data</div><div class="settings-row-desc">CSV, JSON, or text</div></div>
@@ -868,128 +892,288 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
 <div class="toast" id="toast"></div>
 
 <script>
-// â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-var subs = JSON.parse(localStorage.getItem('subkit-subs') || '[]');
+var SUPABASE_URL = 'https://hncffbdvniedxfkawjhl.supabase.co';
+var SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_NejWIQfdOe-L4DaJx6MRdA_uyEGXs1b';
+var PROD_APP_URL = 'https://subkit-ten.vercel.app/';
+var LOCAL_SUBS_KEY = 'subkit-subs-local';
+var LEGACY_SUBS_KEY = 'subkit-subs';
+var CLOUD_SYNC_FLAG_PREFIX = 'subkit-cloud-sync-';
+var supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+var subs = [];
+var currentUser = null;
 var selEmoji_ = '📺';
 var curDetail = null;
 var editId = null;
 var calOff = 0;
-var calSel = null; // selected date
+var calSel = null;
 
-// â”€â”€ CURRENCIES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 var C = {
-USD:{symbol:'$',  name:'US Dollar',       flag:'🇺🇸',coffee:4.25, r:1    },
-THB:{symbol:'฿', name:'Thai Baht',        flag:'🇹🇭',coffee:150,  r:35   },
-EUR:{symbol:'€', name:'Euro',             flag:'🇪🇺',coffee:3.5,  r:0.92 },
-JPY:{symbol:'¥', name:'Japanese Yen',     flag:'🇯🇵',coffee:500,  r:149  },
-GBP:{symbol:'£', name:'British Pound',    flag:'🇬🇧',coffee:3.2,  r:0.79 },
-SGD:{symbol:'S$',name:'Singapore Dollar', flag:'🇸🇬',coffee:5.5,  r:1.34 }
+  USD:{symbol:'$',  name:'US Dollar',       flag:'🇺🇸',coffee:4.25, r:1    },
+  THB:{symbol:'฿', name:'Thai Baht',        flag:'🇹🇭',coffee:150,  r:35   },
+  EUR:{symbol:'€', name:'Euro',             flag:'🇪🇺',coffee:3.5,  r:0.92 },
+  JPY:{symbol:'¥', name:'Japanese Yen',     flag:'🇯🇵',coffee:500,  r:149  },
+  GBP:{symbol:'£', name:'British Pound',    flag:'🇬🇧',coffee:3.2,  r:0.79 },
+  SGD:{symbol:'S$',name:'Singapore Dollar', flag:'🇸🇬',coffee:5.5,  r:1.34 }
 };
 var disp = localStorage.getItem('subkit-currency') || 'USD';
 var live = null;
 
-function getR(code){ return (live&&live[code])?live[code]:(C[code]?C[code].r:1); }
-function toUSD(a,c){ return a/getR(c||'USD'); }
-function fmtD(usd){ var v=usd*getR(disp); return disp==='JPY'?C[disp].symbol+Math.round(v).toLocaleString():C[disp].symbol+v.toFixed(2); }
-function fmtO(a,c){ var cc=C[c]||C.USD; return (c==='JPY'?cc.symbol+Math.round(a):cc.symbol+parseFloat(a).toFixed(2))+' '+c; }
-function coffees(usd){ return Math.max(0,Math.round(usd*getR(disp)/C[disp].coffee)); }
-function moUSD(sub){ var u=toUSD(parseFloat(sub.price),sub.currency||'USD'); return sub.cycle==='yearly'?u/12:sub.cycle==='weekly'?u*4.33:u; }
-function totUSD(){ return subs.reduce(function(s,x){return s+moUSD(x);},0); }
-
-// â”€â”€ LIVE RATES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function fetchRates(){
-  var c=localStorage.getItem('subkit-rates'),ts=parseInt(localStorage.getItem('subkit-rates-ts')||'0');
-  if(c&&Date.now()-ts<3600000){try{live=JSON.parse(c);renderAll();}catch(e){}return;}
-  fetch('https://open.er-api.com/v6/latest/USD').then(function(r){return r.json();}).then(function(d){
-    if(d&&d.rates){live=d.rates;localStorage.setItem('subkit-rates',JSON.stringify(d.rates));localStorage.setItem('subkit-rates-ts',Date.now()+'');renderAll();}
-  }).catch(function(){});
-}
-
-// â”€â”€ HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function save(){ localStorage.setItem('subkit-subs',JSON.stringify(subs)); }
-function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
-function dL(sub){ if(!sub.nextDate)return null; return Math.ceil((new Date(sub.nextDate)-new Date())/86400000); }
-function pDays(sub){ return sub.cycle==='yearly'?365:sub.cycle==='weekly'?7:30; }
-function elap(sub){ var l=dL(sub); if(l===null)return 0; return Math.max(0,Math.min(100,Math.round((1-l/pDays(sub))*100))); }
-
-// â”€â”€ NAV â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 var pageTitles = {home:'Dashboard',subs:'Subscriptions',calendar:'Calendar',analytics:'Analytics',reminders:'Reminders',settings:'Settings'};
 var pageSubs = {home:'Overview of all your subscriptions',subs:'Manage all your tracked services',calendar:'Renewal calendar',analytics:'Spending breakdown & insights',reminders:'Email reminder configuration',settings:'App preferences & configuration'};
+
+var EJS = {
+  serviceId:  localStorage.getItem('ejs-service')  || '',
+  templateId: localStorage.getItem('ejs-template') || '',
+  pubKey:     localStorage.getItem('ejs-pubkey')   || '',
+  email:      localStorage.getItem('ejs-email')    || '',
+  days:       parseInt(localStorage.getItem('ejs-days') || '3', 10)
+};
+
+function esc(value){
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function getR(code){ return (live&&live[code]) ? live[code] : (C[code] ? C[code].r : 1); }
+function toUSD(amount, code){ return amount / getR(code || 'USD'); }
+function fmtD(usd){ var v=usd*getR(disp); return disp==='JPY' ? C[disp].symbol+Math.round(v).toLocaleString() : C[disp].symbol+v.toFixed(2); }
+function fmtO(amount, code){ var cc=C[code]||C.USD; return (code==='JPY' ? cc.symbol+Math.round(amount) : cc.symbol+parseFloat(amount).toFixed(2))+' '+code; }
+function coffees(usd){ return Math.max(0, Math.round(usd*getR(disp)/C[disp].coffee)); }
+function moUSD(sub){
+  var u = toUSD(parseFloat(sub.price), sub.currency || 'USD');
+  if(sub.cycle==='yearly') return u/12;
+  if(sub.cycle==='quarterly') return u/3;
+  if(sub.cycle==='weekly') return u*4.33;
+  return u;
+}
+function totUSD(){ return subs.reduce(function(sum, item){ return sum + moUSD(item); }, 0); }
+function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+function dL(sub){ if(!sub.nextDate) return null; return Math.ceil((new Date(sub.nextDate) - new Date()) / 86400000); }
+function pDays(sub){ return sub.cycle==='yearly' ? 365 : sub.cycle==='quarterly' ? 90 : sub.cycle==='weekly' ? 7 : 30; }
+function elap(sub){ var left=dL(sub); if(left===null) return 0; return Math.max(0, Math.min(100, Math.round((1-left/pDays(sub))*100))); }
+function isCloudMode(){ return !!currentUser; }
+function cloudSyncFlagKey(){ return currentUser ? CLOUD_SYNC_FLAG_PREFIX + currentUser.id : ''; }
+
+function loadLocalSubs(){
+  var raw = localStorage.getItem(LOCAL_SUBS_KEY);
+  if(!raw){
+    raw = localStorage.getItem(LEGACY_SUBS_KEY);
+    if(raw) localStorage.setItem(LOCAL_SUBS_KEY, raw);
+  }
+  try { return JSON.parse(raw || '[]'); } catch (e) { return []; }
+}
+function saveLocalSubs(items){ localStorage.setItem(LOCAL_SUBS_KEY, JSON.stringify(items)); }
+function save(){ saveLocalSubs(subs); }
+
+function normalizeSub(row){
+  return {
+    id: row.id,
+    name: row.name,
+    price: parseFloat(row.price),
+    currency: row.currency || 'USD',
+    cycle: row.cycle || 'monthly',
+    nextDate: row.next_date || '',
+    category: row.category || 'Other',
+    emoji: row.emoji || '📺',
+    _lastRemind: row.last_remind || null
+  };
+}
+function toDbPayload(sub){
+  return {
+    name: sub.name,
+    price: sub.price,
+    currency: sub.currency || 'USD',
+    cycle: sub.cycle || 'monthly',
+    next_date: sub.nextDate || null,
+    category: sub.category || 'Other',
+    emoji: sub.emoji || '📺',
+    last_remind: sub._lastRemind || null
+  };
+}
+function seedLocalSubs(){
+  if(loadLocalSubs().length) return;
+  var now = new Date();
+  function d(offset){ var r=new Date(now); r.setDate(r.getDate()+offset); return r.toISOString().split('T')[0]; }
+  saveLocalSubs([
+    {id:'1',name:'Netflix',emoji:'📺',price:379,currency:'THB',cycle:'monthly',nextDate:d(9),category:'Entertainment'},
+    {id:'2',name:'Apple Developer',emoji:'🍎',price:99,currency:'USD',cycle:'yearly',nextDate:d(275),category:'Productivity'},
+    {id:'3',name:'Cursor',emoji:'👨‍💻',price:60,currency:'USD',cycle:'monthly',nextDate:d(12),category:'AI Tools'},
+    {id:'4',name:'YouTube',emoji:'▶️',price:17.98,currency:'USD',cycle:'monthly',nextDate:d(30),category:'Entertainment'},
+    {id:'5',name:'iCloud',emoji:'☁️',price:139,currency:'THB',cycle:'monthly',nextDate:d(29),category:'Utilities'}
+  ]);
+}
+
+function fetchRates(){
+  var cached=localStorage.getItem('subkit-rates');
+  var ts=parseInt(localStorage.getItem('subkit-rates-ts') || '0', 10);
+  if(cached && Date.now()-ts < 3600000){
+    try { live = JSON.parse(cached); renderAll(); } catch (e) {}
+    return;
+  }
+  fetch('https://open.er-api.com/v6/latest/USD')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d && d.rates){
+        live=d.rates;
+        localStorage.setItem('subkit-rates', JSON.stringify(d.rates));
+        localStorage.setItem('subkit-rates-ts', String(Date.now()));
+        renderAll();
+      }
+    })
+    .catch(function(){});
+}
+
+function setAuthFeedback(message, type){
+  var el = document.getElementById('auth-feedback');
+  el.textContent = message;
+  el.style.color = type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--green)' : 'var(--muted)';
+}
+function renderAuthState(){
+  var title = document.getElementById('auth-status-title');
+  var copy = document.getElementById('auth-status-copy');
+  var signOutBtn = document.getElementById('auth-signout-btn');
+  if(currentUser){
+    title.textContent = 'Cloud sync is on';
+    copy.textContent = currentUser.email + ' is connected. New subscriptions now save to Supabase.';
+    title.style.color = 'var(--green)';
+    signOutBtn.style.display = 'inline-flex';
+    setAuthFeedback('Signed in. Changes now sync to the cloud.', 'success');
+  } else {
+    title.textContent = 'Local-only mode';
+    copy.textContent = 'Sign in to store subscriptions in Supabase and sync them across devices.';
+    title.style.color = 'var(--text)';
+    signOutBtn.style.display = 'none';
+    setAuthFeedback('Your existing local subscriptions stay on this device until you sign in.', '');
+  }
+}
+async function syncLocalDraftToCloud(){
+  if(!currentUser) return;
+  var localSubs = loadLocalSubs();
+  if(!localSubs.length) return;
+  var flagKey = cloudSyncFlagKey();
+  if(flagKey && localStorage.getItem(flagKey)) return;
+  var existing = await supabaseClient.from('subscriptions').select('id', { count:'exact', head:true });
+  if(existing.error) throw existing.error;
+  if(existing.count && existing.count > 0){
+    localStorage.setItem(flagKey, 'skip');
+    return;
+  }
+  var payload = localSubs.map(function(sub){
+    return Object.assign({ user_id: currentUser.id }, toDbPayload(sub));
+  });
+  var inserted = await supabaseClient.from('subscriptions').insert(payload);
+  if(inserted.error) throw inserted.error;
+  localStorage.setItem(flagKey, 'done');
+}
+async function loadSubscriptions(){
+  if(currentUser){
+    var result = await supabaseClient
+      .from('subscriptions')
+      .select('*')
+      .order('next_date', { ascending: true, nullsFirst: false });
+    if(result.error){
+      toast('Could not load cloud subscriptions', 'error');
+      throw result.error;
+    }
+    subs = result.data.map(normalizeSub);
+  } else {
+    seedLocalSubs();
+    subs = loadLocalSubs();
+  }
+  renderAll();
+  renderCalendar();
+}
 
 function switchTab(tab, btn){
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
   document.querySelectorAll('.nav-item, .m-nav-btn').forEach(function(b){b.classList.remove('active');});
   document.getElementById('screen-'+tab).classList.add('active');
   if(btn) btn.classList.add('active');
-  // sync sidebar + mobile nav
   document.querySelectorAll('[data-tab="'+tab+'"]').forEach(function(b){b.classList.add('active');});
-  document.getElementById('page-title').textContent = pageTitles[tab]||tab;
-  document.getElementById('page-sub').textContent = pageSubs[tab]||'';
+  document.getElementById('page-title').textContent = pageTitles[tab] || tab;
+  document.getElementById('page-sub').textContent = pageSubs[tab] || '';
   if(tab==='calendar') renderCalendar();
   if(tab==='analytics') renderAnalytics();
   if(tab==='reminders') renderReminders();
 }
 
-// â”€â”€ RENDER ALL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function renderAll(){ renderHome(); renderSubsList(); renderAnalytics(); renderReminders(); updateBadges(); }
-
+function renderAll(){
+  renderHome();
+  renderSubsList();
+  renderAnalytics();
+  renderReminders();
+  updateBadges();
+}
 function updateBadges(){
-  var soon = subs.filter(function(s){var d=dL(s);return d!==null&&d>=0&&d<=7;}).length;
+  var soon = subs.filter(function(s){ var days=dL(s); return days!==null && days>=0 && days<=7; }).length;
   var sb = document.getElementById('subs-badge');
-  sb.textContent = subs.length; sb.style.display = subs.length?'':'none';
+  sb.textContent = subs.length;
+  sb.style.display = subs.length ? '' : 'none';
   var rb = document.getElementById('remind-badge');
-  rb.style.display = soon?'':'none';
+  rb.textContent = soon;
+  rb.style.display = soon ? '' : 'none';
 }
-
-// â”€â”€ RENDER HOME â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderHome(){
-  var tot=totUSD(), rate=getR(disp), rs=disp==='JPY'?Math.round(rate):rate.toFixed(2);
-  document.getElementById('total-display').textContent=fmtD(tot);
-  document.getElementById('stat-count').textContent=subs.length;
-  document.getElementById('stat-annual').textContent=fmtD(tot*12);
-  document.getElementById('coffee-pill').textContent='= '+coffees(tot)+' Coffee ☕';
-  document.getElementById('rate-pill').textContent='💱 '+disp+' (1 USD ≈ '+rs+')';
-  var soon=subs.filter(function(s){var d=dL(s);return d!==null&&d>=0&&d<=7;}).length;
-  document.getElementById('stat-soon').textContent=soon;
+  var total=totUSD();
+  var rate=getR(disp);
+  var rateText=disp==='JPY' ? Math.round(rate) : rate.toFixed(2);
+  document.getElementById('total-display').textContent = fmtD(total);
+  document.getElementById('stat-count').textContent = subs.length;
+  document.getElementById('stat-annual').textContent = fmtD(total * 12);
+  document.getElementById('coffee-pill').textContent = '= ' + coffees(total) + ' Coffee ☕';
+  document.getElementById('rate-pill').textContent = '💱 ' + disp + ' (1 USD ≈ ' + rateText + ')';
+  document.getElementById('stat-soon').textContent = subs.filter(function(s){ var days=dL(s); return days!==null && days>=0 && days<=7; }).length;
 
-  // Renewals grid (next 30 days)
-  var rg=document.getElementById('renewal-grid');
-  var up=subs.filter(function(s){var d=dL(s);return d!==null&&d>=0&&d<=30;}).sort(function(a,b){return new Date(a.nextDate)-new Date(b.nextDate);});
-  if(!up.length){rg.innerHTML='<div class="empty-state" style="padding:30px"><div class="empty-icon">🎉</div><h3>No renewals soon</h3></div>';}
-  else{rg.innerHTML=up.map(function(sub){
-    var dl=dL(sub),sc=sub.currency||'USD',bc=dl<=3?'danger':dl<=7?'warn':'';
-    return '<div class="renewal-card" onclick="openDetail(\''+sub.id+'\')">'+
-      '<div class="renewal-card-top"><div class="renewal-card-icon">'+sub.emoji+'</div>'+
-      '<div><div class="renewal-card-price">'+fmtD(moUSD(sub))+'</div>'+(sc!==disp?'<div class="renewal-card-orig">'+fmtO(sub.price,sc)+'</div>':'')+' </div></div>'+
-      '<div class="renewal-card-name">'+sub.name+'</div>'+
-      '<div class="renewal-card-date"><span class="badge '+bc+'">'+dl+' days left</span> · '+new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})+'</div></div>';
-  }).join('');}
+  var renewalGrid = document.getElementById('renewal-grid');
+  var upcoming = subs.filter(function(s){
+    var days = dL(s);
+    return days!==null && days>=0 && days<=30;
+  }).sort(function(a,b){ return new Date(a.nextDate) - new Date(b.nextDate); });
 
-  // Sub list preview (top 5)
-  renderSubListEl('home-sub-list', subs.slice(0,5));
+  if(!upcoming.length){
+    renewalGrid.innerHTML = '<div class="empty-state" style="padding:30px"><div class="empty-icon">🎉</div><h3>No renewals soon</h3></div>';
+  } else {
+    renewalGrid.innerHTML = upcoming.map(function(sub){
+      var days = dL(sub);
+      var sc = sub.currency || 'USD';
+      var badgeClass = days<=3 ? 'danger' : days<=7 ? 'warn' : '';
+      return '<div class="renewal-card" onclick="openDetail(\''+esc(sub.id)+'\')">'+
+        '<div class="renewal-card-top"><div class="renewal-card-icon">'+esc(sub.emoji)+'</div>'+
+        '<div><div class="renewal-card-price">'+fmtD(moUSD(sub))+'</div>'+(sc!==disp?'<div class="renewal-card-orig">'+fmtO(sub.price,sc)+'</div>':'')+'</div></div>'+
+        '<div class="renewal-card-name">'+esc(sub.name)+'</div>'+
+        '<div class="renewal-card-date"><span class="badge '+badgeClass+'">'+days+' days left</span> · '+new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})+'</div></div>';
+    }).join('');
+  }
+
+  renderSubListEl('home-sub-list', subs.slice(0, 5));
 }
-
-// â”€â”€ RENDER SUB LIST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderSubListEl(elId, list){
-  var el=document.getElementById(elId);
-  if(!list.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><h3>No subscriptions yet</h3></div>';return;}
-  el.innerHTML=list.map(function(sub){
-    var dl=dL(sub),pct=elap(sub),sc=sub.currency||'USD';
-    var fc=dl!==null&&dl<=3?'danger':dl!==null&&dl<=7?'warn':'';
-    var dateStr=sub.nextDate?new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'-';
-    return '<div class="sub-row" onclick="openDetail(\''+sub.id+'\')">'+
-      '<div class="sub-row-icon">'+sub.emoji+'</div>'+
-      '<div><div class="sub-row-name">'+sub.name+'</div><div class="sub-row-cat">'+sub.category+'</div></div>'+
-      '<div><div class="sub-row-price">'+fmtD(moUSD(sub))+'/mo</div>'+(sc!==disp?'<div class="sub-row-orig">'+fmtO(sub.price,sc)+'</div>':'')+' </div>'+
-      '<div class="sub-row-date">'+dateStr+(dl!==null?'<br><span class="badge '+fc+'" style="margin-top:4px">'+dl+'d</span>':'')+'</div>'+
-      '<div class="sub-row-bar"><div class="sub-row-days">'+pct+'% elapsed</div><div class="progress-bar"><div class="progress-fill '+fc+'" style="width:'+pct+'%"></div></div></div>'+
+  var el = document.getElementById(elId);
+  if(!list.length){
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><h3>No subscriptions yet</h3></div>';
+    return;
+  }
+  el.innerHTML = list.map(function(sub){
+    var days = dL(sub);
+    var pct = elap(sub);
+    var sc = sub.currency || 'USD';
+    var fillClass = days!==null && days<=3 ? 'danger' : days!==null && days<=7 ? 'warn' : '';
+    var dateStr = sub.nextDate ? new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '-';
+    return '<div class="sub-row" onclick="openDetail(\''+esc(sub.id)+'\')">'+
+      '<div class="sub-row-icon">'+esc(sub.emoji)+'</div>'+
+      '<div><div class="sub-row-name">'+esc(sub.name)+'</div><div class="sub-row-cat">'+esc(sub.category)+'</div></div>'+
+      '<div><div class="sub-row-price">'+fmtD(moUSD(sub))+'/mo</div>'+(sc!==disp?'<div class="sub-row-orig">'+fmtO(sub.price,sc)+'</div>':'')+'</div>'+
+      '<div class="sub-row-date">'+dateStr+(days!==null?'<br><span class="badge '+fillClass+'" style="margin-top:4px">'+days+'d</span>':'')+'</div>'+
+      '<div class="sub-row-bar"><div class="sub-row-days">'+pct+'% elapsed</div><div class="progress-bar"><div class="progress-fill '+fillClass+'" style="width:'+pct+'%"></div></div></div>'+
       '<div class="sub-row-actions"><span style="color:var(--muted);font-size:18px">></span></div></div>';
   }).join('');
 }
-
 function renderSubsList(){ renderSubListEl('subs-list', subs); }
 
-// â”€â”€ CALENDAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderCalendarDueList(list, selectedDate, monthDate){
   var el=document.getElementById('cal-sub-list');
   if(!list.length){
@@ -1003,12 +1187,12 @@ function renderCalendarDueList(list, selectedDate, monthDate){
   el.innerHTML=list.map(function(sub){
     var sc=sub.currency||'USD';
     var renewalText=sub.nextDate ? new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
-    return '<div class="calendar-due-card" onclick="openDetail(\''+sub.id+'\')">'+
+    return '<div class="calendar-due-card" onclick="openDetail(\''+esc(sub.id)+'\')">'+
       '<div class="calendar-due-main">'+
-        '<div class="sub-row-icon">'+sub.emoji+'</div>'+
+        '<div class="sub-row-icon">'+esc(sub.emoji)+'</div>'+
         '<div class="calendar-due-meta">'+
-          '<div class="calendar-due-name">'+sub.name+'</div>'+
-          '<div class="calendar-due-sub">'+renewalText+' · '+sub.category+' · '+cap(sub.cycle)+'</div>'+
+          '<div class="calendar-due-name">'+esc(sub.name)+'</div>'+
+          '<div class="calendar-due-sub">'+renewalText+' · '+esc(sub.category)+' · '+cap(sub.cycle)+'</div>'+
         '</div>'+
       '</div>'+
       '<div class="calendar-due-price">'+
@@ -1019,90 +1203,104 @@ function renderCalendarDueList(list, selectedDate, monthDate){
   }).join('');
 }
 function renderCalendar(){
-  var now=new Date(), t=new Date(now.getFullYear(),now.getMonth()+calOff,1);
-  document.getElementById('cal-title').textContent=t.toLocaleDateString('en-US',{month:'long',year:'numeric'});
-  var heads=document.getElementById('cal-heads');
-  heads.innerHTML=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(function(d){return '<div class="cal-day-head">'+d+'</div>';}).join('');
-  var firstDay=t.getDay(), daysInMonth=new Date(t.getFullYear(),t.getMonth()+1,0).getDate();
+  var now=new Date();
+  var monthDate=new Date(now.getFullYear(), now.getMonth()+calOff, 1);
+  document.getElementById('cal-title').textContent=monthDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  document.getElementById('cal-heads').innerHTML=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(function(day){ return '<div class="cal-day-head">'+day+'</div>'; }).join('');
+  var firstDay=monthDate.getDay();
+  var daysInMonth=new Date(monthDate.getFullYear(), monthDate.getMonth()+1, 0).getDate();
   var todayStr=now.toISOString().split('T')[0];
-  // build renewal date set
   var renewalDates={};
-  subs.forEach(function(s){if(s.nextDate){var d=new Date(s.nextDate);if(d.getMonth()===t.getMonth()&&d.getFullYear()===t.getFullYear()){var dl=dL(s);renewalDates[d.getDate()]=(dl!==null&&dl<=3)?'urgent':'normal';}}});
+  subs.forEach(function(sub){
+    if(!sub.nextDate) return;
+    var date=new Date(sub.nextDate);
+    if(date.getMonth()===monthDate.getMonth() && date.getFullYear()===monthDate.getFullYear()){
+      var days=dL(sub);
+      renewalDates[date.getDate()] = (days!==null && days<=3) ? 'urgent' : 'normal';
+    }
+  });
   var html='';
   for(var i=0;i<firstDay;i++) html+='<div class="cal-day other-month"></div>';
   for(var d=1;d<=daysInMonth;d++){
-    var ds=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-    var cls='cal-day'+(ds===todayStr?' today':'')+(renewalDates[d]?' has-renewal':'')+(renewalDates[d]==='urgent'?' urgent':'')+(calSel===ds?' selected':'');
-    html+='<div class="'+cls+'" onclick="selectCalDay(\''+ds+'\')">'+d+'</div>';
+    var dateString=monthDate.getFullYear()+'-'+String(monthDate.getMonth()+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    var cls='cal-day'+(dateString===todayStr?' today':'')+(renewalDates[d]?' has-renewal':'')+(renewalDates[d]==='urgent'?' urgent':'')+(calSel===dateString?' selected':'');
+    html+='<div class="'+cls+'" onclick="selectCalDay(\''+dateString+'\')">'+d+'</div>';
   }
   var totalCells=firstDay+daysInMonth;
   var trailing=(7-(totalCells%7))%7;
   for(var j=0;j<trailing;j++) html+='<div class="cal-day other-month"></div>';
   document.getElementById('cal-grid').innerHTML=html;
+
   var showDate=calSel;
-  var calSubs=subs.filter(function(s){
-    if(!s.nextDate)return false;
-    var d=new Date(s.nextDate);
-    if(showDate) return s.nextDate===showDate;
-    return d.getMonth()===t.getMonth()&&d.getFullYear()===t.getFullYear();
-  }).sort(function(a,b){ return new Date(a.nextDate)-new Date(b.nextDate); });
-  document.getElementById('cal-selected-title').textContent=showDate?'Subscriptions due on '+new Date(showDate).toLocaleDateString('en-US',{month:'long',day:'numeric'}):'Renewals in '+t.toLocaleDateString('en-US',{month:'long',year:'numeric'});
-  renderCalendarDueList(calSubs, showDate, t);
+  var filtered=subs.filter(function(sub){
+    if(!sub.nextDate) return false;
+    var date=new Date(sub.nextDate);
+    if(showDate) return sub.nextDate===showDate;
+    return date.getMonth()===monthDate.getMonth() && date.getFullYear()===monthDate.getFullYear();
+  }).sort(function(a,b){ return new Date(a.nextDate) - new Date(b.nextDate); });
+  document.getElementById('cal-selected-title').textContent = showDate
+    ? 'Subscriptions due on ' + new Date(showDate).toLocaleDateString('en-US',{month:'long',day:'numeric'})
+    : 'Renewals in ' + monthDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  renderCalendarDueList(filtered, showDate, monthDate);
 }
-function changeMonth(dir){calOff+=dir;calSel=null;renderCalendar();}
-function selectCalDay(ds){calSel=(calSel===ds)?null:ds;renderCalendar();}
+function changeMonth(dir){ calOff += dir; calSel = null; renderCalendar(); }
+function selectCalDay(ds){ calSel = (calSel===ds) ? null : ds; renderCalendar(); }
 
-// â”€â”€ ANALYTICS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderAnalytics(){
-  var tot=totUSD();
-  document.getElementById('an-total').textContent=fmtD(tot);
-  document.getElementById('an-avg').textContent=subs.length?fmtD(tot/subs.length):'-';
-  var top=subs.slice().sort(function(a,b){return moUSD(b)-moUSD(a);})[0];
-  document.getElementById('an-top').textContent=top?top.emoji+' '+top.name:'-';
+  var total=totUSD();
+  var top=subs.slice().sort(function(a,b){ return moUSD(b)-moUSD(a); })[0];
   var colors=['#4dd8e8','#4ddc9a','#ffa64d','#ff5f7a','#b08dff','#f9ca24','#6ab04c'];
-  // by sub
-  var sorted=subs.slice().sort(function(a,b){return moUSD(b)-moUSD(a);}).slice(0,7);
-  document.getElementById('chart-subs').innerHTML=sorted.map(function(s,i){
-    var mo=moUSD(s),pct=tot>0?Math.round((mo/tot)*100):0;
-    return '<div class="bar-row"><div class="bar-label">'+s.emoji+' '+s.name+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+colors[i%colors.length]+'"></div></div><div class="bar-val">'+fmtD(mo)+'</div></div>';
-  }).join('')||'<div style="color:var(--muted);font-size:13px">No data</div>';
-  // by category
   var cats={};
-  subs.forEach(function(s){cats[s.category]=(cats[s.category]||0)+moUSD(s);});
-  document.getElementById('chart-cats').innerHTML=Object.keys(cats).sort(function(a,b){return cats[b]-cats[a];}).map(function(cat,i){
-    var pct=tot>0?Math.round((cats[cat]/tot)*100):0;
-    return '<div class="bar-row"><div class="bar-label">'+cat+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+colors[i%colors.length]+'"></div></div><div class="bar-val">'+fmtD(cats[cat])+'</div></div>';
-  }).join('')||'<div style="color:var(--muted);font-size:13px">No data</div>';
-  // by cycle
-  document.getElementById('an-top').textContent=top?top.emoji+' '+top.name:'-';
-  subs.forEach(function(s){cyc[s.cycle]=(cyc[s.cycle]||0)+moUSD(s);});
-  document.getElementById('chart-cycles').innerHTML=Object.keys(cyc).filter(function(k){return cyc[k]>0;}).map(function(k,i){
-    var pct=tot>0?Math.round((cyc[k]/tot)*100):0;
-    return '<div class="bar-row"><div class="bar-label">'+cap(k)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+colors[i]+'"></div></div><div class="bar-val">'+fmtD(cyc[k])+'</div></div>';
-  }).join('')||'<div style="color:var(--muted);font-size:13px">No data</div>';
+  var cyc={};
+  document.getElementById('an-total').textContent = fmtD(total);
+  document.getElementById('an-avg').textContent = subs.length ? fmtD(total/subs.length) : '-';
+  document.getElementById('an-top').textContent = top ? top.emoji+' '+top.name : '-';
+
+  document.getElementById('chart-subs').innerHTML = subs.slice().sort(function(a,b){ return moUSD(b)-moUSD(a); }).slice(0,7).map(function(sub, i){
+    var monthly = moUSD(sub);
+    var pct = total>0 ? Math.round((monthly/total)*100) : 0;
+    return '<div class="bar-row"><div class="bar-label">'+esc(sub.emoji)+' '+esc(sub.name)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+colors[i%colors.length]+'"></div></div><div class="bar-val">'+fmtD(monthly)+'</div></div>';
+  }).join('') || '<div style="color:var(--muted);font-size:13px">No data</div>';
+
+  subs.forEach(function(sub){
+    cats[sub.category] = (cats[sub.category] || 0) + moUSD(sub);
+    cyc[sub.cycle] = (cyc[sub.cycle] || 0) + moUSD(sub);
+  });
+
+  document.getElementById('chart-cats').innerHTML = Object.keys(cats).sort(function(a,b){ return cats[b]-cats[a]; }).map(function(cat, i){
+    var pct = total>0 ? Math.round((cats[cat]/total)*100) : 0;
+    return '<div class="bar-row"><div class="bar-label">'+esc(cat)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+colors[i%colors.length]+'"></div></div><div class="bar-val">'+fmtD(cats[cat])+'</div></div>';
+  }).join('') || '<div style="color:var(--muted);font-size:13px">No data</div>';
+
+  document.getElementById('chart-cycles').innerHTML = Object.keys(cyc).filter(function(key){ return cyc[key]>0; }).map(function(key, i){
+    var pct = total>0 ? Math.round((cyc[key]/total)*100) : 0;
+    return '<div class="bar-row"><div class="bar-label">'+cap(key)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+colors[i%colors.length]+'"></div></div><div class="bar-val">'+fmtD(cyc[key])+'</div></div>';
+  }).join('') || '<div style="color:var(--muted);font-size:13px">No data</div>';
 }
 
-// â”€â”€ CURRENCY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openCurrencyModal(){
   var html='';
   Object.keys(C).forEach(function(code){
-    var c=C[code],r=getR(code),rs=code==='JPY'?Math.round(r):r.toFixed(4),sel=code===disp;
-    html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--surface2);border:2px solid '+(sel?'var(--cyan)':'transparent')+';border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;transition:border-color 0.15s" onclick="selCurrency(\''+code+'\')">';
-    html+='<div style="display:flex;align-items:center;gap:12px"><span style="font-size:22px">'+c.flag+'</span><div><div style="font-size:14px;font-weight:600">'+code+' - '+c.name+'</div><div style="font-size:12px;color:var(--muted)">1 USD = '+rs+' '+code+'</div></div></div>';
-    html+='<div style="display:flex;align-items:center;gap:8px"><span style="font-family:Space Mono,monospace;font-size:16px;font-weight:700;color:var(--cyan)">'+c.symbol+'</span>'+(sel?'<span style="color:var(--cyan)">✓</span>':'')+'</div></div>';
+    var c=C[code];
+    var rate=getR(code);
+    var rateString=code==='JPY' ? Math.round(rate) : rate.toFixed(4);
+    var selected=code===disp;
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--surface2);border:2px solid '+(selected?'var(--cyan)':'transparent')+';border-radius:var(--radius-sm);margin-bottom:8px;cursor:pointer;transition:border-color 0.15s" onclick="selCurrency(\''+code+'\')">';
+    html+='<div style="display:flex;align-items:center;gap:12px"><span style="font-size:22px">'+c.flag+'</span><div><div style="font-size:14px;font-weight:600">'+code+' - '+c.name+'</div><div style="font-size:12px;color:var(--muted)">1 USD = '+rateString+' '+code+'</div></div></div>';
+    html+='<div style="display:flex;align-items:center;gap:8px"><span style="font-family:Space Mono,monospace;font-size:16px;font-weight:700;color:var(--cyan)">'+c.symbol+'</span>'+(selected?'<span style="color:var(--cyan)">✓</span>':'')+'</div></div>';
   });
   document.getElementById('currency-list').innerHTML=html;
   document.getElementById('currency-modal').classList.add('open');
   fetchRates();
 }
 function selCurrency(code){
-  disp=code; localStorage.setItem('subkit-currency',code);
-  document.getElementById('currency-desc-s').textContent=code+' - '+C[code].name;
+  disp = code;
+  localStorage.setItem('subkit-currency', code);
+  document.getElementById('currency-desc-s').textContent = code + ' - ' + C[code].name;
   document.getElementById('currency-modal').classList.remove('open');
   renderAll();
 }
 
-// â”€â”€ ADD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function resetAddForm(){
   var d=new Date();
   d.setDate(d.getDate()+30);
@@ -1112,7 +1310,7 @@ function resetAddForm(){
   document.getElementById('sub-name').value='';
   document.getElementById('sub-price').value='';
   document.getElementById('sub-category').value='Entertainment';
-  document.getElementById('sub-currency').value=disp in C?disp:'USD';
+  document.getElementById('sub-currency').value=disp in C ? disp : 'USD';
   document.getElementById('sub-cycle').value='monthly';
   document.getElementById('sub-date').value=d.toISOString().split('T')[0];
   document.getElementById('add-submit-btn').textContent='Add Subscription';
@@ -1125,7 +1323,7 @@ function openAddModal(){
   document.getElementById('add-modal').classList.add('open');
 }
 function openEditModal(id){
-  var sub=subs.find(function(s){return s.id===id;});
+  var sub=subs.find(function(item){ return item.id===id; });
   if(!sub) return;
   editId=id;
   selEmoji_=sub.emoji||'📺';
@@ -1148,35 +1346,62 @@ function closeAddModal(){
   resetAddForm();
 }
 function selEmoji(btn){
-  document.querySelectorAll('.emoji-btn').forEach(function(b){b.classList.remove('selected');});
-  btn.classList.add('selected'); selEmoji_=btn.dataset.emoji;
+  document.querySelectorAll('.emoji-btn').forEach(function(b){ b.classList.remove('selected'); });
+  btn.classList.add('selected');
+  selEmoji_ = btn.dataset.emoji;
 }
-function saveSub(){
+async function saveSub(){
   var name=document.getElementById('sub-name').value.trim();
   var price=parseFloat(document.getElementById('sub-price').value);
   var currency=document.getElementById('sub-currency').value;
   var cycle=document.getElementById('sub-cycle').value;
   var date=document.getElementById('sub-date').value;
   var category=document.getElementById('sub-category').value;
-  if(!name||!price){toast('Please fill in name and price','error');return;}
-  var payload={id:editId||Date.now()+'',name:name,price:price,currency:currency,cycle:cycle,nextDate:date,category:category,emoji:selEmoji_};
-  if(editId){
-    subs=subs.map(function(sub){ return sub.id===editId ? Object.assign({}, sub, payload) : sub; });
-  }else{
-    subs.push(payload);
+  if(!name || Number.isNaN(price)){
+    toast('Please fill in name and price', 'error');
+    return;
   }
-  save();
-  document.getElementById('add-modal').classList.remove('open');
-  renderAll();
-  toast(editId?'✓ '+name+' updated!':'✓ '+name+' added!','success');
-  resetAddForm();
+
+  var payload={name:name,price:price,currency:currency,cycle:cycle,nextDate:date,category:category,emoji:selEmoji_};
+  try {
+    if(currentUser){
+      if(editId){
+        var updated = await supabaseClient.from('subscriptions').update(toDbPayload(payload)).eq('id', editId).select('*').single();
+        if(updated.error) throw updated.error;
+        subs = subs.map(function(sub){ return sub.id===editId ? normalizeSub(updated.data) : sub; });
+      } else {
+        var inserted = await supabaseClient.from('subscriptions').insert(Object.assign({ user_id: currentUser.id }, toDbPayload(payload))).select('*').single();
+        if(inserted.error) throw inserted.error;
+        subs.unshift(normalizeSub(inserted.data));
+      }
+    } else {
+      var localPayload = Object.assign({ id: editId || String(Date.now()) }, payload);
+      if(editId){
+        subs = subs.map(function(sub){ return sub.id===editId ? Object.assign({}, sub, localPayload) : sub; });
+      } else {
+        subs.push(localPayload);
+      }
+      save();
+    }
+
+    document.getElementById('add-modal').classList.remove('open');
+    renderAll();
+    renderCalendar();
+    toast(editId ? '✓ '+name+' updated!' : '✓ '+name+' added!', 'success');
+    resetAddForm();
+  } catch (error) {
+    toast('Could not save subscription', 'error');
+  }
 }
 
-// â”€â”€ DETAIL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function openDetail(id){
-  var sub=subs.find(function(s){return s.id===id;}); if(!sub)return;
+  var sub=subs.find(function(item){ return item.id===id; });
+  if(!sub) return;
   curDetail=id;
-  var sc=sub.currency||'USD',dl=dL(sub),pct=elap(sub),bc=dl!==null&&dl<=3?'danger':dl!==null&&dl<=7?'warn':'';
+  var sc=sub.currency||'USD';
+  var days=dL(sub);
+  var pct=elap(sub);
+  var badgeClass=days!==null&&days<=3?'danger':days!==null&&days<=7?'warn':'';
   document.getElementById('d-icon').textContent=sub.emoji;
   document.getElementById('d-name').textContent=sub.name;
   document.getElementById('d-price').textContent=fmtD(moUSD(sub))+'/mo';
@@ -1186,187 +1411,323 @@ function openDetail(id){
   document.getElementById('d-cycle').textContent=cap(sub.cycle);
   document.getElementById('d-cat').textContent=sub.category;
   document.getElementById('d-next').textContent=sub.nextDate?new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'-';
-  document.getElementById('d-days').innerHTML=dl!==null?'<span class="badge '+bc+'">in '+dl+' days</span>':'-';
+  document.getElementById('d-days').innerHTML=days!==null?'<span class="badge '+badgeClass+'">in '+days+' days</span>':'-';
   document.getElementById('d-pct').textContent=pct+'% elapsed';
   document.getElementById('d-prog').style.width=pct+'%';
-  document.getElementById('d-prog').className='progress-fill'+(dl!==null&&dl<=3?' danger':dl!==null&&dl<=7?' warn':'');
-  document.getElementById('d-glance').textContent='= '+Math.max(1,coffees(moUSD(sub)))+' Coffee ☕ / month';
+  document.getElementById('d-prog').className='progress-fill'+(days!==null&&days<=3?' danger':days!==null&&days<=7?' warn':'');
+  document.getElementById('d-glance').textContent='= '+Math.max(1, coffees(moUSD(sub)))+' Coffee ☕ / month';
   document.getElementById('detail-modal').classList.add('open');
 }
-function editCurrentSub(){
+function editCurrentSub(){ if(curDetail) openEditModal(curDetail); }
+async function deleteSub(){
   if(!curDetail) return;
-  openEditModal(curDetail);
-}
-function deleteSub(){
-  if(!curDetail)return;
-  if(!confirm('Remove this subscription?'))return;
-  var name=subs.find(function(s){return s.id===curDetail;}).name;
-  subs=subs.filter(function(s){return s.id!==curDetail;});
-  save(); document.getElementById('detail-modal').classList.remove('open'); renderAll(); toast('Removed '+name,'');
+  if(!confirm('Remove this subscription?')) return;
+  var sub=subs.find(function(item){ return item.id===curDetail; });
+  if(!sub) return;
+  try {
+    if(currentUser){
+      var removed = await supabaseClient.from('subscriptions').delete().eq('id', curDetail);
+      if(removed.error) throw removed.error;
+    }
+    subs = subs.filter(function(item){ return item.id!==curDetail; });
+    if(!currentUser) save();
+    document.getElementById('detail-modal').classList.remove('open');
+    renderAll();
+    renderCalendar();
+    toast('Removed '+sub.name, 'success');
+  } catch (error) {
+    toast('Could not remove subscription', 'error');
+  }
 }
 
-// â”€â”€ EXPORT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function openExportModal(){ document.getElementById('export-status').textContent=''; document.getElementById('export-modal').classList.add('open'); }
-function dlFile(name,content,type){ var b=new Blob([content],{type:type}),u=URL.createObjectURL(b),a=document.createElement('a'); a.href=u;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(u);},1000); }
+function openExportModal(){
+  document.getElementById('export-status').textContent='';
+  document.getElementById('export-modal').classList.add('open');
+}
+function dlFile(name, content, type){
+  var blob=new Blob([content], {type:type});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;
+  a.download=name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
 function exportCSV(){
   var rows=['Name,Original Price,Currency,Monthly ('+disp+'),Cycle,Next Date,Category'];
-  subs.forEach(function(s){rows.push(['"'+s.name+'"',s.price,s.currency||'USD',fmtD(moUSD(s)).replace(',',''),s.cycle,s.nextDate||'',s.category].join(','));});
-  rows.push('');rows.push('"TOTAL",,,"'+fmtD(totUSD())+'",,, ');
-  dlFile('subkit-export.csv',rows.join('\n'),'text/csv');
+  subs.forEach(function(sub){
+    rows.push(['"'+String(sub.name).replace(/"/g, '""')+'"', sub.price, sub.currency||'USD', fmtD(moUSD(sub)).replace(',',''), sub.cycle, sub.nextDate||'', '"'+String(sub.category).replace(/"/g, '""')+'"'].join(','));
+  });
+  rows.push('');
+  rows.push('"TOTAL",,,"'+fmtD(totUSD())+'",,,');
+  dlFile('subkit-export.csv', rows.join('\n'), 'text/csv');
   document.getElementById('export-status').textContent='✓ CSV downloaded!';
 }
 function exportJSON(){
-  dlFile('subkit-backup.json',JSON.stringify({exportedAt:new Date().toISOString(),displayCurrency:disp,totalMonthly:fmtD(totUSD()),subscriptions:subs},null,2),'application/json');
+  dlFile('subkit-backup.json', JSON.stringify({exportedAt:new Date().toISOString(),displayCurrency:disp,totalMonthly:fmtD(totUSD()),subscriptions:subs}, null, 2), 'application/json');
   document.getElementById('export-status').textContent='✓ JSON downloaded!';
 }
 function exportText(){
   var lines=['📦 SubKit - '+new Date().toLocaleDateString(),'Total monthly: '+fmtD(totUSD()),''];
-  subs.forEach(function(s){var sc=s.currency||'USD';lines.push('• '+s.emoji+' '+s.name+'\n  '+fmtO(s.price,sc)+'/'+s.cycle+' -> '+fmtD(moUSD(s))+'/mo'+(s.nextDate?'\n  Next: '+new Date(s.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''));});
+  subs.forEach(function(sub){
+    var sc=sub.currency||'USD';
+    lines.push('• '+sub.emoji+' '+sub.name+'\n  '+fmtO(sub.price,sc)+'/'+sub.cycle+' -> '+fmtD(moUSD(sub))+'/mo'+(sub.nextDate?'\n  Next: '+new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''));
+  });
   var txt=lines.join('\n');
-  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(function(){document.getElementById('export-status').textContent='✓ Copied!';}).catch(function(){fbCopy(txt);});}else{fbCopy(txt);}
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(function(){
+      document.getElementById('export-status').textContent='✓ Copied!';
+    }).catch(function(){ fbCopy(txt); });
+  } else {
+    fbCopy(txt);
+  }
 }
-function fbCopy(txt){var ta=document.createElement('textarea');ta.value=txt;ta.style.cssText='position:fixed;opacity:0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');document.getElementById('export-status').textContent='✓ Copied!';}catch(e){}document.body.removeChild(ta);}
-
-// â”€â”€ EMAIL REMINDERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-var EJS = {
-  serviceId:  localStorage.getItem('ejs-service')  || '',
-  templateId: localStorage.getItem('ejs-template') || '',
-  pubKey:     localStorage.getItem('ejs-pubkey')   || '',
-  email:      localStorage.getItem('ejs-email')    || '',
-  days:       parseInt(localStorage.getItem('ejs-days') || '3')
-};
+function fbCopy(txt){
+  var ta=document.createElement('textarea');
+  ta.value=txt;
+  ta.style.cssText='position:fixed;opacity:0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    document.getElementById('export-status').textContent='✓ Copied!';
+  } catch (e) {}
+  document.body.removeChild(ta);
+}
 
 function saveEmailSettings(){
-  EJS.serviceId  = document.getElementById('ejs-service').value.trim();
-  EJS.templateId = document.getElementById('ejs-template').value.trim();
-  EJS.pubKey     = document.getElementById('ejs-pubkey').value.trim();
-  EJS.email      = document.getElementById('remind-email').value.trim();
-  EJS.days       = parseInt(document.getElementById('remind-days').value);
-  localStorage.setItem('ejs-service',  EJS.serviceId);
+  EJS.serviceId=document.getElementById('ejs-service').value.trim();
+  EJS.templateId=document.getElementById('ejs-template').value.trim();
+  EJS.pubKey=document.getElementById('ejs-pubkey').value.trim();
+  EJS.email=document.getElementById('remind-email').value.trim();
+  EJS.days=parseInt(document.getElementById('remind-days').value, 10);
+  localStorage.setItem('ejs-service', EJS.serviceId);
   localStorage.setItem('ejs-template', EJS.templateId);
-  localStorage.setItem('ejs-pubkey',   EJS.pubKey);
-  localStorage.setItem('ejs-email',    EJS.email);
-  localStorage.setItem('ejs-days',     EJS.days);
+  localStorage.setItem('ejs-pubkey', EJS.pubKey);
+  localStorage.setItem('ejs-email', EJS.email);
+  localStorage.setItem('ejs-days', String(EJS.days));
   if(EJS.pubKey) emailjs.init(EJS.pubKey);
   document.getElementById('email-save-status').textContent='✓ Saved!';
-  toast('✓ Email settings saved','success');
+  toast('✓ Email settings saved', 'success');
   renderReminders();
 }
-
 function ejsReady(){ return EJS.serviceId && EJS.templateId && EJS.pubKey && EJS.email; }
-
-function sendReminderEmail(sub){
-  if(!ejsReady()) return;
-  var dl=dL(sub);
-  emailjs.send(EJS.serviceId, EJS.templateId, {
-    to_email:     EJS.email,
-    sub_name:     sub.name,
-    sub_price:    fmtD(moUSD(sub))+'/mo',
-    sub_orig:     fmtO(sub.price, sub.currency||'USD'),
-    renewal_date: sub.nextDate ? new Date(sub.nextDate).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : '-',
-    days_left:    dl !== null ? dl : '-',
-    sub_emoji:    sub.emoji
-  }).then(function(){
-    toast('📧 Reminder sent for '+sub.name,'success');
-    // mark sent
-    sub._lastRemind = new Date().toISOString().split('T')[0];
+async function persistReminderState(sub, today){
+  sub._lastRemind = today;
+  if(currentUser){
+    var result = await supabaseClient.from('subscriptions').update({ last_remind: today }).eq('id', sub.id);
+    if(result.error) throw result.error;
+  } else {
     save();
-    renderReminders();
-  }).catch(function(e){
-    toast('Email failed: '+(e.text||e),'error');
+  }
+}
+function sendReminderEmail(sub){
+  if(!sub || !ejsReady()) return;
+  var days=dL(sub);
+  emailjs.send(EJS.serviceId, EJS.templateId, {
+    to_email: EJS.email,
+    sub_name: sub.name,
+    sub_price: fmtD(moUSD(sub))+'/mo',
+    sub_orig: fmtO(sub.price, sub.currency||'USD'),
+    renewal_date: sub.nextDate ? new Date(sub.nextDate).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : '-',
+    days_left: days !== null ? days : '-',
+    sub_emoji: sub.emoji
+  }).then(function(){
+    var today = new Date().toISOString().split('T')[0];
+    persistReminderState(sub, today).then(function(){
+      toast('📧 Reminder sent for '+sub.name, 'success');
+      renderReminders();
+    }).catch(function(){
+      toast('Reminder sent, but status could not be saved', 'error');
+      renderReminders();
+    });
+  }).catch(function(error){
+    toast('Email failed: ' + (error.text || error), 'error');
   });
 }
-
 function sendTestEmail(){
-  if(!ejsReady()){toast('Save your EmailJS settings first','error');return;}
-  var fakeSub={name:'SubKit Test',price:9.99,currency:'USD',cycle:'monthly',nextDate:new Date(Date.now()+3*86400000).toISOString().split('T')[0],emoji:'⚡'};
+  if(!ejsReady()){
+    toast('Save your EmailJS settings first', 'error');
+    return;
+  }
   emailjs.send(EJS.serviceId, EJS.templateId, {
-    to_email:     EJS.email,
-    sub_name:     'SubKit Test Reminder',
-    sub_price:    fmtD(9.99)+'/mo',
-    sub_orig:     '$9.99 USD',
+    to_email: EJS.email,
+    sub_name: 'SubKit Test Reminder',
+    sub_price: fmtD(9.99)+'/mo',
+    sub_orig: '$9.99 USD',
     renewal_date: new Date(Date.now()+3*86400000).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}),
-    days_left:    '3',
-    sub_emoji:    '⚡'
-  }).then(function(){ toast('📧 Test email sent to '+EJS.email,'success'); }).catch(function(e){ toast('Failed: '+(e.text||e),'error'); });
+    days_left: '3',
+    sub_emoji: '⚡'
+  }).then(function(){
+    toast('📧 Test email sent to '+EJS.email, 'success');
+  }).catch(function(error){
+    toast('Failed: ' + (error.text || error), 'error');
+  });
 }
-
 function checkAndSendReminders(){
   if(!ejsReady()) return;
   var today=new Date().toISOString().split('T')[0];
   subs.forEach(function(sub){
-    var dl=dL(sub);
-    if(dl===null||dl<0||dl>EJS.days) return;
-    if(sub._lastRemind===today) return; // already sent today
+    var days=dL(sub);
+    if(days===null || days<0 || days>EJS.days) return;
+    if(sub._lastRemind===today) return;
     sendReminderEmail(sub);
   });
 }
-
 function renderReminders(){
   var configured=ejsReady();
   document.getElementById('reminder-config-status').textContent = configured
     ? '✓ EmailJS configured. Reminders will be sent '+EJS.days+' day(s) before renewal to '+EJS.email+'.'
     : '⚠ EmailJS not configured. Go to Settings -> Email Reminders to set up.';
   document.getElementById('reminder-config-status').style.color = configured ? 'var(--green)' : 'var(--warn)';
-
-  // Upcoming that need reminders
-  var upcoming=subs.filter(function(s){var d=dL(s);return d!==null&&d>=0&&d<=30;}).sort(function(a,b){return new Date(a.nextDate)-new Date(b.nextDate);});
+  var upcoming=subs.filter(function(sub){ var days=dL(sub); return days!==null && days>=0 && days<=30; }).sort(function(a,b){ return new Date(a.nextDate)-new Date(b.nextDate); });
   renderSubListEl('reminder-upcoming', upcoming);
-
-  // Reminder schedule
   var rl=document.getElementById('reminder-schedule');
-  if(!upcoming.length){rl.innerHTML='<div style="color:var(--muted);font-size:13px;padding:8px">No upcoming renewals in 30 days</div>';return;}
+  if(!upcoming.length){
+    rl.innerHTML='<div style="color:var(--muted);font-size:13px;padding:8px">No upcoming renewals in 30 days</div>';
+    return;
+  }
   rl.innerHTML=upcoming.map(function(sub){
-    var dl=dL(sub), willSend=dl<=EJS.days, sent=sub._lastRemind===new Date().toISOString().split('T')[0];
+    var days=dL(sub);
+    var willSend=days<=EJS.days;
+    var sent=sub._lastRemind===new Date().toISOString().split('T')[0];
     var dot=sent?'var(--green)':willSend?'var(--warn)':'var(--muted2)';
-    var status=sent?'✓ Sent today':willSend?'Will send today':'In '+(dl-EJS.days)+' days';
+    var status=sent?'✓ Sent today':willSend?'Will send today':'In '+(days-EJS.days)+' days';
     return '<div class="reminder-item"><div class="reminder-dot" style="background:'+dot+'"></div>'+
-      '<div class="reminder-info"><div class="reminder-name">'+sub.emoji+' '+sub.name+'</div>'+
-      '<div class="reminder-when">Renews in '+dl+' days · '+fmtD(moUSD(sub))+'/mo</div></div>'+
+      '<div class="reminder-info"><div class="reminder-name">'+esc(sub.emoji)+' '+esc(sub.name)+'</div>'+
+      '<div class="reminder-when">Renews in '+days+' days · '+fmtD(moUSD(sub))+'/mo</div></div>'+
       '<div class="reminder-status" style="color:'+dot+'">'+status+'</div>'+
-      (configured?'<button onclick="sendReminderEmail(subs.find(function(s){return s.id===\''+sub.id+'\'}))" style="margin-left:10px;background:var(--surface);border:1px solid var(--muted2);border-radius:6px;color:var(--muted);padding:4px 8px;cursor:pointer;font-size:11px;font-family:DM Sans,sans-serif">Send now</button>':'')+'</div>';
+      (configured?'<button onclick="sendReminderEmail(subs.find(function(s){return s.id===\''+esc(sub.id)+'\'}))" style="margin-left:10px;background:var(--surface);border:1px solid var(--muted2);border-radius:6px;color:var(--muted);padding:4px 8px;cursor:pointer;font-size:11px;font-family:DM Sans,sans-serif">Send now</button>':'')+'</div>';
   }).join('');
 }
 
-// â”€â”€ UTILS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function closeModal(e,id){
   if(e.target!==e.currentTarget) return;
   document.getElementById(id).classList.remove('open');
   if(id==='add-modal') resetAddForm();
 }
-function clearAll(){if(!confirm('Clear all subscriptions? Cannot be undone.'))return;subs=[];save();renderAll();toast('All data cleared','');}
-function toast(msg,type){var t=document.getElementById('toast');t.textContent=msg;t.className='toast '+(type||'');requestAnimationFrame(function(){t.classList.add('show');});setTimeout(function(){t.classList.remove('show');},3000);}
+async function clearAll(){
+  if(!confirm('Clear all subscriptions? Cannot be undone.')) return;
+  try {
+    if(currentUser){
+      var removed = await supabaseClient.from('subscriptions').delete().eq('user_id', currentUser.id);
+      if(removed.error) throw removed.error;
+    } else {
+      saveLocalSubs([]);
+    }
+    subs = [];
+    renderAll();
+    renderCalendar();
+    toast('All data cleared', 'success');
+  } catch (error) {
+    toast('Could not clear subscriptions', 'error');
+  }
+}
+function toast(msg,type){
+  var t=document.getElementById('toast');
+  t.textContent=msg;
+  t.className='toast '+(type||'');
+  requestAnimationFrame(function(){ t.classList.add('show'); });
+  setTimeout(function(){ t.classList.remove('show'); }, 3000);
+}
 
-// â”€â”€ SEED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-(function(){
-  if(subs.length)return;
-  var n=new Date();
-  function d(x){var r=new Date(n);r.setDate(r.getDate()+x);return r.toISOString().split('T')[0];}
-  subs=[
-    {id:'1',name:'Netflix',        emoji:'📺',price:379,  currency:'THB',cycle:'monthly',nextDate:d(9),  category:'Entertainment'},
-    {id:'2',name:'Apple Developer',emoji:'🍎',price:99,   currency:'USD',cycle:'yearly', nextDate:d(275),category:'Productivity' },
-    {id:'3',name:'Cursor',         emoji:'👨‍💻',price:60,   currency:'USD',cycle:'monthly',nextDate:d(12), category:'AI Tools'    },
-    {id:'4',name:'YouTube',        emoji:'▶️',price:17.98,currency:'USD',cycle:'monthly',nextDate:d(30), category:'Entertainment'},
-    {id:'5',name:'iCloud',         emoji:'☁️',price:139,  currency:'THB',cycle:'monthly',nextDate:d(29), category:'Utilities'   },
-  ];
-  save();
-})();
+function authCreds(){
+  return {
+    email: document.getElementById('auth-email').value.trim(),
+    password: document.getElementById('auth-password').value
+  };
+}
+function getAuthRedirectUrl(){
+  if(window.location.protocol === 'http:' || window.location.protocol === 'https:'){
+    return window.location.origin + window.location.pathname;
+  }
+  return PROD_APP_URL;
+}
+async function signUp(){
+  var creds=authCreds();
+  if(!creds.email || creds.password.length < 6){
+    setAuthFeedback('Use a real email and a password with at least 6 characters.', 'error');
+    return;
+  }
+  var result = await supabaseClient.auth.signUp({ email: creds.email, password: creds.password });
+  if(result.error){
+    setAuthFeedback(result.error.message, 'error');
+    return;
+  }
+  setAuthFeedback(result.data.session ? 'Account created and signed in.' : 'Account created. Check your inbox if email confirmation is enabled.', 'success');
+}
+async function signIn(){
+  var creds=authCreds();
+  if(!creds.email || !creds.password){
+    setAuthFeedback('Enter both email and password to sign in.', 'error');
+    return;
+  }
+  var result = await supabaseClient.auth.signInWithPassword({ email: creds.email, password: creds.password });
+  if(result.error){
+    setAuthFeedback(result.error.message, 'error');
+    return;
+  }
+  setAuthFeedback('Signed in. Loading your cloud subscriptions...', 'success');
+}
+async function signInWithGitHub(){
+  var result = await supabaseClient.auth.signInWithOAuth({
+    provider: 'github',
+    options: {
+      redirectTo: getAuthRedirectUrl()
+    }
+  });
+  if(result.error){
+    setAuthFeedback(result.error.message, 'error');
+    return;
+  }
+  setAuthFeedback('Redirecting to GitHub sign-in...', 'success');
+}
+async function signOut(){
+  var result = await supabaseClient.auth.signOut();
+  if(result.error){
+    setAuthFeedback(result.error.message, 'error');
+    return;
+  }
+  setAuthFeedback('Signed out. Local subscriptions are available again on this device.', 'success');
+}
+async function initAuth(){
+  renderAuthState();
+  var sessionResult = await supabaseClient.auth.getSession();
+  currentUser = sessionResult.data.session ? sessionResult.data.session.user : null;
+  renderAuthState();
+  if(currentUser){
+    try { await syncLocalDraftToCloud(); } catch (error) {}
+  }
+  await loadSubscriptions();
+  supabaseClient.auth.onAuthStateChange(function(_event, session){
+    currentUser = session ? session.user : null;
+    renderAuthState();
+    Promise.resolve()
+      .then(function(){ return currentUser ? syncLocalDraftToCloud() : null; })
+      .catch(function(){})
+      .then(function(){ return loadSubscriptions(); })
+      .catch(function(){ toast('Could not refresh subscriptions', 'error'); });
+  });
+}
 
-// â”€â”€ INIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Restore settings fields
-if(EJS.serviceId)  document.getElementById('ejs-service').value  = EJS.serviceId;
+if(EJS.serviceId) document.getElementById('ejs-service').value = EJS.serviceId;
 if(EJS.templateId) document.getElementById('ejs-template').value = EJS.templateId;
-if(EJS.pubKey)     document.getElementById('ejs-pubkey').value   = EJS.pubKey;
-if(EJS.email)      document.getElementById('remind-email').value = EJS.email;
+if(EJS.pubKey) document.getElementById('ejs-pubkey').value = EJS.pubKey;
+if(EJS.email) document.getElementById('remind-email').value = EJS.email;
 document.getElementById('remind-days').value = EJS.days;
 document.getElementById('currency-desc-s').textContent = disp+' - '+C[disp].name;
-if(EJS.pubKey) try{ emailjs.init(EJS.pubKey); }catch(e){}
+if(EJS.pubKey) try { emailjs.init(EJS.pubKey); } catch (e) {}
 
 fetchRates();
 renderAll();
 renderCalendar();
-// Check & send any due reminders on load
-setTimeout(checkAndSendReminders, 2000);
+initAuth().then(function(){
+  setTimeout(checkAndSendReminders, 2000);
+}).catch(function(){
+  toast('Supabase setup needs one more check', 'error');
+});
 </script>
 </body>
 </html>
