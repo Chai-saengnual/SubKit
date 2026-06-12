@@ -142,6 +142,33 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .header-btn:hover { border-color: var(--cyan); color: var(--cyan); }
 .header-btn.primary { background: var(--cyan); color: var(--bg); border-color: var(--cyan); font-weight: 600; }
 .header-btn.primary:hover { opacity: 0.9; color: var(--bg); }
+.subs-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.subs-search,
+.subs-sort {
+  background: var(--surface);
+  border: 1px solid var(--muted2);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+}
+.subs-search {
+  flex: 1;
+  min-width: 220px;
+}
+.subs-sort {
+  min-width: 180px;
+}
+.subs-search::placeholder {
+  color: var(--muted);
+}
 
 /* SCREEN PANELS */
 .screen {
@@ -463,6 +490,8 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
   .modal-box { border-radius: 20px; padding: 20px; }
   .cal-grid { gap: 6px; }
   .cal-day { min-height: 58px; padding: 8px; font-size: 13px; }
+  .subs-toolbar { flex-direction: column; align-items: stretch; }
+  .subs-search, .subs-sort { width: 100%; min-width: 0; }
 
   /* Mobile bottom nav */
   .mobile-nav {
@@ -604,6 +633,16 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
     <!-- SUBSCRIPTIONS -->
     <div class="screen" id="screen-subs">
+      <div class="subs-toolbar">
+        <input class="subs-search" id="subs-search" type="search" placeholder="Search by name, category, or currency" oninput="updateSubsFilters()" />
+        <select class="subs-sort" id="subs-sort" onchange="updateSubsFilters()">
+          <option value="next-renewal">Sort: Next renewal</option>
+          <option value="price-high">Sort: Highest monthly cost</option>
+          <option value="price-low">Sort: Lowest monthly cost</option>
+          <option value="name-az">Sort: Name A-Z</option>
+          <option value="recent-added">Sort: Recently added</option>
+        </select>
+      </div>
       <div class="table-header">
         <div></div><div>Name</div><div>Price / mo</div><div>Next Renewal</div><div>Progress</div><div></div>
       </div>
@@ -968,6 +1007,8 @@ var supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISH
 var subs = [];
 var currentUser = null;
 var isAppLoading = false;
+var subsSearch = '';
+var subsSort = 'next-renewal';
 var selEmoji_ = '📺';
 var curDetail = null;
 var editId = null;
@@ -1213,6 +1254,34 @@ function renderAll(){
   renderReminders();
   updateBadges();
 }
+function filteredSubsList(){
+  var query = subsSearch.trim().toLowerCase();
+  var list = subs.filter(function(sub){
+    if(!query) return true;
+    return [
+      sub.name || '',
+      sub.category || '',
+      sub.currency || '',
+      sub.cycle || ''
+    ].join(' ').toLowerCase().indexOf(query) !== -1;
+  });
+  return list.slice().sort(function(a, b){
+    if(subsSort === 'price-high') return moUSD(b) - moUSD(a);
+    if(subsSort === 'price-low') return moUSD(a) - moUSD(b);
+    if(subsSort === 'name-az') return (a.name || '').localeCompare(b.name || '');
+    if(subsSort === 'recent-added') return String(b.id || '').localeCompare(String(a.id || ''));
+    var aDate = a.nextDate ? new Date(a.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
+    var bDate = b.nextDate ? new Date(b.nextDate).getTime() : Number.MAX_SAFE_INTEGER;
+    return aDate - bDate;
+  });
+}
+function updateSubsFilters(){
+  var searchEl = document.getElementById('subs-search');
+  var sortEl = document.getElementById('subs-sort');
+  subsSearch = searchEl ? searchEl.value : '';
+  subsSort = sortEl ? sortEl.value : 'next-renewal';
+  renderSubsList();
+}
 function updateBadges(){
   var soon = subs.filter(function(s){ var days=dL(s); return days!==null && days>=0 && days<=7; }).length;
   var sb = document.getElementById('subs-badge');
@@ -1277,7 +1346,7 @@ function renderSubListEl(elId, list){
       '<div class="sub-row-actions"><span style="color:var(--muted);font-size:18px">></span></div></div>';
   }).join('');
 }
-function renderSubsList(){ renderSubListEl('subs-list', subs); }
+function renderSubsList(){ renderSubListEl('subs-list', filteredSubsList()); }
 
 function renderCalendarDueList(list, selectedDate, monthDate){
   var el=document.getElementById('cal-sub-list');
