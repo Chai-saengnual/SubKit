@@ -731,11 +731,14 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
       <div style="max-width:600px">
         <div style="background:var(--surface);border:1px solid var(--muted2);border-radius:var(--radius);padding:20px;margin-bottom:20px">
           <div class="settings-section-title">Email Reminder Status</div>
-<div id="reminder-config-status" style="font-size:13px;color:var(--muted);margin-bottom:12px">EmailJS not configured yet. Go to Settings -> Email Reminders to set up.</div>
+          <div id="reminder-config-status" style="font-size:13px;color:var(--muted);margin-bottom:12px">EmailJS not configured yet. Go to Settings → Email Reminders to set up.</div>
+          <div id="reminder-mailto-hint" style="display:none;background:var(--surface2);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:12px;font-size:13px;color:var(--muted)">
+            💡 <strong style="color:var(--text)">No EmailJS?</strong> Open any subscription and tap <strong style="color:var(--text)">Send Reminder Email</strong> — it'll open your mail app with everything pre-filled.
+          </div>
           <div class="reminder-list" id="reminder-schedule"></div>
         </div>
         <div style="background:var(--surface);border:1px solid var(--muted2);border-radius:var(--radius);padding:20px">
-<div class="settings-section-title">Upcoming - Next 30 Days</div>
+          <div class="settings-section-title">Upcoming - Next 30 Days</div>
           <div class="sub-list" id="reminder-upcoming"></div>
         </div>
       </div>
@@ -1015,6 +1018,7 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
       <div id="invoice-signin-msg" style="display:none;font-size:12px;color:var(--muted);text-align:center;padding:10px 0">Sign in to upload &amp; store invoices</div>
     </div>
 
+    <button id="detail-remind-btn" class="btn-secondary" style="margin-bottom:10px;width:100%" onclick="sendDetailReminder()">📧 Send Reminder Email</button>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="editCurrentSub()">Edit</button>
       <button class="btn-danger" onclick="deleteSub()">🗑 Remove</button>
@@ -1831,6 +1835,50 @@ async function markAsRenewed(){
   }
 }
 
+/* ── DETAIL REMINDER ──────────────────────────────────────── */
+function sendDetailReminder(){
+  if(!curDetail) return;
+  var sub = subs.find(function(s){ return s.id===curDetail; });
+  if(!sub) return;
+  if(ejsReady()){
+    // EmailJS path — reuse existing sendReminderEmail
+    setButtonBusy('detail-remind-btn', true, 'Sending…', '📧 Send Reminder Email');
+    var days = dL(sub);
+    emailjs.send(EJS.serviceId, EJS.templateId, {
+      to_email: EJS.email,
+      sub_name: sub.name,
+      sub_price: fmtD(moUSD(sub))+'/mo',
+      sub_orig: fmtO(sub.price, sub.currency||'USD'),
+      renewal_date: sub.nextDate ? new Date(sub.nextDate).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : '-',
+      days_left: days !== null ? String(days) : '-',
+      sub_emoji: sub.emoji
+    }).then(function(){
+      toast('📧 Reminder sent for '+sub.name, 'success');
+      setButtonBusy('detail-remind-btn', false, 'Sending…', '📧 Send Reminder Email');
+    }).catch(function(err){
+      toast('Email failed: '+(err.text||err), 'error');
+      setButtonBusy('detail-remind-btn', false, 'Sending…', '📧 Send Reminder Email');
+    });
+  } else {
+    // mailto: fallback — opens native mail client, no setup needed
+    var days = dL(sub);
+    var dateStr = sub.nextDate ? new Date(sub.nextDate).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : 'soon';
+    var daysStr = days !== null ? ' in '+days+' day'+(days===1?'':'s') : '';
+    var subject = encodeURIComponent('⏰ Reminder: '+sub.name+' renews'+daysStr);
+    var body = encodeURIComponent(
+      sub.emoji+' '+sub.name+'\n\n'+
+      'Renewal date: '+dateStr+'\n'+
+      'Amount: '+fmtO(sub.price, sub.currency||'USD')+' ('+fmtD(moUSD(sub))+'/mo)\n'+
+      'Billing cycle: '+cap(sub.cycle)+'\n'+
+      (sub.account ? 'Account: '+sub.account+'\n' : '')+
+      '\n— Sent from SubKit'
+    );
+    window.location.href = 'mailto:?subject='+subject+'&body='+body;
+    toast('📧 Opening your mail app…', 'success');
+  }
+}
+/* ── /DETAIL REMINDER ─────────────────────────────────────── */
+
 /* ── INVOICES ─────────────────────────────────────────────── */
 function fmtBytes(bytes){
   if(!bytes) return '';
@@ -2109,8 +2157,10 @@ function renderReminders(){
   var configured=ejsReady();
   document.getElementById('reminder-config-status').textContent = configured
     ? '✓ EmailJS configured. Reminders will be sent '+EJS.days+' day(s) before renewal to '+EJS.email+'.'
-    : '⚠ EmailJS not configured. Go to Settings -> Email Reminders to set up.';
+    : '⚠ EmailJS not configured. Go to Settings → Email Reminders to set up.';
   document.getElementById('reminder-config-status').style.color = configured ? 'var(--green)' : 'var(--warn)';
+  var hint = document.getElementById('reminder-mailto-hint');
+  if(hint) hint.style.display = configured ? 'none' : '';
   var upcoming=subs.filter(function(sub){ var days=dL(sub); return days!==null && days>=0 && days<=30; }).sort(function(a,b){ return new Date(a.nextDate)-new Date(b.nextDate); });
   renderSubListEl('reminder-upcoming', upcoming);
   var rl=document.getElementById('reminder-schedule');
