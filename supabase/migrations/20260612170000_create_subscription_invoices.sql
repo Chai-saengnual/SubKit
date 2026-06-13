@@ -18,20 +18,24 @@ create table if not exists public.subscription_invoices (
 
 alter table public.subscription_invoices enable row level security;
 
+drop policy if exists "Users manage own invoices" on public.subscription_invoices;
 create policy "Users manage own invoices"
   on public.subscription_invoices
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
 -- Storage RLS: path must start with user's own uid folder
+drop policy if exists "Users upload own invoices" on storage.objects;
 create policy "Users upload own invoices"
   on storage.objects for insert
   with check (bucket_id = 'invoices' and auth.uid()::text = (storage.foldername(name))[1]);
 
+drop policy if exists "Users read own invoices" on storage.objects;
 create policy "Users read own invoices"
   on storage.objects for select
   using (bucket_id = 'invoices' and auth.uid()::text = (storage.foldername(name))[1]);
 
+drop policy if exists "Users delete own invoices" on storage.objects;
 create policy "Users delete own invoices"
   on storage.objects for delete
   using (bucket_id = 'invoices' and auth.uid()::text = (storage.foldername(name))[1]);

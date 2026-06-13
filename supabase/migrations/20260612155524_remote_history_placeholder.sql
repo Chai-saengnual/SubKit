@@ -1,0 +1,2 @@
+-- Placeholder migration to align local history with the linked remote project.
+-- The corresponding migration version already exists remotely.

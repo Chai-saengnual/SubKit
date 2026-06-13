@@ -63,6 +63,15 @@ Deno.serve(async (req) => {
   const sent: string[] = []
   const failed: string[] = []
 
+  const effectiveAmount = (sub: Record<string, unknown>) => {
+    const actual = sub.actual_price == null ? null : Number(sub.actual_price)
+    if (sub.price_mode !== 'fixed' && actual !== null && Number.isFinite(actual) && actual >= 0) {
+      return actual
+    }
+    const base = Number(sub.price)
+    return Number.isFinite(base) ? base : 0
+  }
+
   for (const sub of subs ?? []) {
     // Skip if already reminded today
     if (sub.last_remind === today) continue
@@ -82,8 +91,11 @@ Deno.serve(async (req) => {
           template_params: {
             to_email: ejs_email,
             sub_name: sub.name,
-            sub_price: `${sub.price} ${sub.currency}/mo`,
-            sub_orig: `${sub.price} ${sub.currency}`,
+            sub_price: `${effectiveAmount(sub)} ${sub.currency}/${sub.cycle}`,
+            sub_orig:
+              sub.price_mode !== 'fixed'
+                ? `${effectiveAmount(sub)} ${sub.currency} • Ref ${sub.price} ${sub.currency}`
+                : `${sub.price} ${sub.currency}`,
             renewal_date: new Date(sub.next_date).toLocaleDateString('en-US', {
               weekday: 'long',
               month: 'long',

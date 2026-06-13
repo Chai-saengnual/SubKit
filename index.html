@@ -1005,7 +1005,7 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
       <input class="form-input" type="text" id="sub-account" placeholder="you@gmail.com or Personal" />
     </div>
     <div class="form-group">
-      <label class="form-label">Price &amp; Currency</label>
+      <label class="form-label" id="sub-price-label">Price &amp; Currency</label>
       <div class="price-row">
         <div style="position:relative;flex:1">
           <span id="price-currency-hint" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none;font-family:Space Mono,monospace;z-index:1">$</span>
@@ -1020,6 +1020,25 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
           <option value="SGD">SGD S$</option>
         </select>
       </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:8px" id="sub-price-help">Use the normal recurring amount for this item.</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Amount Mode</label>
+        <select class="form-select" id="sub-price-mode" onchange="updatePriceModeFields()">
+          <option value="fixed">Fixed recurring price</option>
+          <option value="actual">Use actual paid amount</option>
+          <option value="variable">Use latest or estimated bill</option>
+        </select>
+      </div>
+      <div class="form-group" id="sub-actual-price-group">
+        <label class="form-label" id="sub-actual-price-label">Actual / Estimated Amount</label>
+        <input class="form-input" type="number" id="sub-actual-price" placeholder="192.00" step="0.01" min="0" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Pricing Note <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+      <input class="form-input" type="text" id="sub-price-note" placeholder="Paid 192 after trial, regular plan is 200" />
     </div>
     <div class="form-row">
       <div class="form-group">
@@ -1054,12 +1073,15 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
       </div>
     </div>
     <div class="info-grid">
-<div class="info-box"><div class="info-box-label">Original Price</div><div class="info-box-value" id="d-orig-price">-</div></div>
+<div class="info-box"><div class="info-box-label" id="d-ref-price-label">Reference Price</div><div class="info-box-value" id="d-orig-price">-</div></div>
+<div class="info-box"><div class="info-box-label">Amount Used</div><div class="info-box-value" id="d-amount-used">-</div></div>
+<div class="info-box"><div class="info-box-label">Pricing Mode</div><div class="info-box-value" id="d-price-mode">-</div></div>
 <div class="info-box"><div class="info-box-label">Billing Cycle</div><div class="info-box-value" id="d-cycle">-</div></div>
 <div class="info-box"><div class="info-box-label">Next Charge</div><div class="info-box-value" id="d-next">-</div></div>
 <div class="info-box"><div class="info-box-label">Days Left</div><div class="info-box-value" id="d-days">-</div></div>
 <div class="info-box"><div class="info-box-label">Category</div><div class="info-box-value" id="d-cat">-</div></div>
 <div class="info-box" id="d-account-box"><div class="info-box-label">Account</div><div class="info-box-value" id="d-account" style="font-size:12px;word-break:break-all">-</div></div>
+<div class="info-box" id="d-price-note-box"><div class="info-box-label">Pricing Note</div><div class="info-box-value" id="d-price-note" style="font-size:12px;line-height:1.5">-</div></div>
       <div class="info-box">
         <div class="info-box-label">Period Elapsed</div>
 <div class="info-box-value" id="d-pct">-</div>
@@ -1233,8 +1255,17 @@ function toUSD(amount, code){ return amount / getR(code || 'USD'); }
 function fmtD(usd){ var v=usd*getR(disp); return disp==='JPY' ? C[disp].symbol+Math.round(v).toLocaleString() : C[disp].symbol+v.toFixed(2); }
 function fmtO(amount, code){ var cc=C[code]||C.USD; return (code==='JPY' ? cc.symbol+Math.round(amount) : cc.symbol+parseFloat(amount).toFixed(2))+' '+code; }
 function coffees(usd){ return Math.max(0, Math.round(usd*getR(disp)/C[disp].coffee)); }
+function validAmount(value){
+  var parsed = parseFloat(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+function effectiveAmount(sub){
+  var actual = validAmount(sub && sub.actualPrice);
+  if(sub && sub.priceMode !== 'fixed' && actual !== null) return actual;
+  return validAmount(sub && sub.price) || 0;
+}
 function moUSD(sub){
-  var u = toUSD(parseFloat(sub.price), sub.currency || 'USD');
+  var u = toUSD(effectiveAmount(sub), sub.currency || 'USD');
   if(sub.cycle==='yearly') return u/12;
   if(sub.cycle==='quarterly') return u/3;
   if(sub.cycle==='weekly') return u*4.33;
@@ -1260,6 +1291,11 @@ function defaultEmojiForCategory(category, type){
   if(category === 'Other Bill') return '🧾';
   if(category === 'Other Subscription') return '📦';
   return type === 'bill' ? '🧾' : '📺';
+}
+function priceModeLabel(mode){
+  if(mode === 'actual') return 'Actual paid amount';
+  if(mode === 'variable') return 'Latest or estimated bill';
+  return 'Fixed recurring price';
 }
 function totalByType(type){
   return subs.reduce(function(sum, item){
@@ -1338,6 +1374,9 @@ function normalizeSub(row){
     id: row.id,
     name: row.name,
     price: parseFloat(row.price),
+    priceMode: row.price_mode || row.priceMode || 'fixed',
+    actualPrice: validAmount(row.actual_price != null ? row.actual_price : row.actualPrice),
+    priceNote: row.price_note || row.priceNote || '',
     currency: row.currency || 'USD',
     cycle: row.cycle || 'monthly',
     nextDate: row.next_date || row.nextDate || '',
@@ -1351,6 +1390,9 @@ function toDbPayload(sub){
   return {
     name: sub.name,
     price: sub.price,
+    price_mode: sub.priceMode || 'fixed',
+    actual_price: validAmount(sub.actualPrice),
+    price_note: sub.priceNote || null,
     currency: sub.currency || 'USD',
     cycle: sub.cycle || 'monthly',
     next_date: sub.nextDate || null,
@@ -1409,6 +1451,38 @@ function updateDateFieldLabel(){
   var typeEl = document.getElementById('sub-type');
   var label = document.getElementById('sub-date-label');
   if(typeEl && label) label.textContent = dueDateLabel(typeEl.value);
+}
+function updatePriceModeFields(){
+  var modeEl = document.getElementById('sub-price-mode');
+  var priceLabel = document.getElementById('sub-price-label');
+  var priceHelp = document.getElementById('sub-price-help');
+  var actualGroup = document.getElementById('sub-actual-price-group');
+  var actualLabel = document.getElementById('sub-actual-price-label');
+  var actualInput = document.getElementById('sub-actual-price');
+  var noteInput = document.getElementById('sub-price-note');
+  if(!modeEl || !priceLabel || !priceHelp || !actualGroup || !actualLabel || !actualInput || !noteInput) return;
+  if(modeEl.value === 'actual'){
+    priceLabel.textContent = 'Reference Price & Currency';
+    priceHelp.textContent = 'Keep the normal plan price here. Subkit will use the actual paid amount for totals.';
+    actualLabel.textContent = 'Actual Paid Amount';
+    actualInput.placeholder = '192.00';
+    actualGroup.style.display = '';
+    noteInput.placeholder = 'Paid 192 after trial, regular plan is 200';
+  } else if(modeEl.value === 'variable'){
+    priceLabel.textContent = 'Reference Price & Currency';
+    priceHelp.textContent = 'Keep a typical or ceiling amount here. Subkit will use the latest or estimated bill for totals.';
+    actualLabel.textContent = 'Latest / Estimated Amount';
+    actualInput.placeholder = '78.50';
+    actualGroup.style.display = '';
+    noteInput.placeholder = 'Average 65-90 depending on usage';
+  } else {
+    priceLabel.textContent = 'Price & Currency';
+    priceHelp.textContent = 'Use one recurring amount every cycle.';
+    actualLabel.textContent = 'Actual / Estimated Amount';
+    actualInput.placeholder = '192.00';
+    actualGroup.style.display = 'none';
+    noteInput.placeholder = 'Optional note about discounts or billing';
+  }
 }
 function updateAddTypeSelection(selectedCategory){
   var typeEl = document.getElementById('sub-type');
@@ -1625,7 +1699,7 @@ function renderHome(){
       var badgeClass = days<=3 ? 'danger' : days<=7 ? 'warn' : '';
       return '<div class="renewal-card" onclick="openDetail(\''+esc(sub.id)+'\')">'+
         '<div class="renewal-card-top"><div class="renewal-card-icon">'+esc(sub.emoji)+'</div>'+
-        '<div><div class="renewal-card-price">'+fmtD(moUSD(sub))+'</div>'+(sc!==disp?'<div class="renewal-card-orig">'+fmtO(sub.price,sc)+'</div>':'')+'</div></div>'+
+        '<div><div class="renewal-card-price">'+fmtD(moUSD(sub))+'</div>'+((sc!==disp || sub.priceMode!=='fixed')?'<div class="renewal-card-orig">'+fmtO(effectiveAmount(sub),sc)+(sub.priceMode!=='fixed'?' · '+priceModeLabel(sub.priceMode):'')+'</div>':'')+'</div></div>'+
         '<div class="renewal-card-name">'+esc(sub.name)+'</div>'+
         '<div class="renewal-card-date"><span class="badge '+badgeClass+'">'+days+' days left</span> · '+new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · '+itemLabel(sub)+'</div></div>';
     }).join('');
@@ -1649,7 +1723,7 @@ function renderSubListEl(elId, list){
     return '<div class="sub-row" onclick="openDetail(\''+esc(sub.id)+'\')">'+
       '<div class="sub-row-icon">'+esc(sub.emoji)+'</div>'+
       '<div><div class="sub-row-name">'+esc(sub.name)+'</div><div class="sub-row-cat">'+esc(sub.category)+typePill+(sub.account?'<span style="margin-left:6px;color:var(--accent);font-size:10px;opacity:.8">'+esc(sub.account)+'</span>':'')+'</div></div>'+
-      '<div><div class="sub-row-price">'+fmtD(moUSD(sub))+'/mo</div>'+(sc!==disp?'<div class="sub-row-orig">'+fmtO(sub.price,sc)+'</div>':'')+'</div>'+
+      '<div><div class="sub-row-price">'+fmtD(moUSD(sub))+'/mo</div>'+((sc!==disp || sub.priceMode!=='fixed')?'<div class="sub-row-orig">'+fmtO(effectiveAmount(sub),sc)+(sub.priceMode!=='fixed'?' · '+priceModeLabel(sub.priceMode):'')+'</div>':'')+'</div>'+
       '<div class="sub-row-date">'+dateStr+(days!==null?'<br><span class="badge '+fillClass+'" style="margin-top:4px">'+dueLabel(sub)+' · '+days+'d</span>':'')+'</div>'+
       '<div class="sub-row-bar"><div class="sub-row-days">'+pct+'% elapsed</div><div class="progress-bar"><div class="progress-fill '+fillClass+'" style="width:'+pct+'%"></div></div></div>'+
       '<div class="sub-row-actions"><span style="color:var(--muted);font-size:18px">></span></div></div>';
@@ -1680,7 +1754,7 @@ function renderCalendarDueList(list, selectedDate, monthDate){
       '</div>'+
       '<div class="calendar-due-price">'+
         '<div class="calendar-due-amount">'+fmtD(moUSD(sub))+'/mo</div>'+
-        (sc!==disp?'<div class="calendar-due-orig">'+fmtO(sub.price,sc)+'</div>':'')+
+        ((sc!==disp || sub.priceMode!=='fixed')?'<div class="calendar-due-orig">'+fmtO(effectiveAmount(sub),sc)+(sub.priceMode!=='fixed'?' · '+priceModeLabel(sub.priceMode):'')+'</div>':'')+
       '</div>'+
     '</div>';
   }).join('');
@@ -1771,7 +1845,7 @@ function buildProjectedMonthly(){
   }
   subs.forEach(function(sub){
     if(!sub.nextDate) return;
-    var priceDisp = toUSD(parseFloat(sub.price), sub.currency||'USD') * getR(disp);
+    var priceDisp = toUSD(effectiveAmount(sub), sub.currency||'USD') * getR(disp);
     var maxD = new Date(now.getFullYear(), now.getMonth()+6, 1);
     if(sub.cycle==='weekly'){
       months.forEach(function(m, idx){
@@ -1848,12 +1922,16 @@ function resetAddForm(){
   document.getElementById('add-modal-title').textContent='Add Item';
   document.getElementById('sub-name').value='';
   document.getElementById('sub-price').value='';
+  document.getElementById('sub-price-mode').value='fixed';
+  document.getElementById('sub-actual-price').value='';
+  document.getElementById('sub-price-note').value='';
   document.getElementById('sub-type').value='subscription';
   document.getElementById('sub-account').value='';
   document.getElementById('sub-currency').value=disp in C ? disp : 'USD';
   document.getElementById('sub-cycle').value='monthly';
   document.getElementById('sub-date').value=d.toISOString().split('T')[0];
   updateAddTypeSelection('Entertainment');
+  updatePriceModeFields();
   document.getElementById('add-submit-btn').textContent='Add Item';
   syncEmojiButtons();
   updatePriceCurrency();
@@ -1878,8 +1956,12 @@ function openEditModal(id){
   document.getElementById('add-modal-title').textContent='Edit Item';
   document.getElementById('sub-name').value=sub.name||'';
   document.getElementById('sub-price').value=sub.price;
+  document.getElementById('sub-price-mode').value=sub.priceMode||'fixed';
+  document.getElementById('sub-actual-price').value=sub.actualPrice != null ? sub.actualPrice : '';
+  document.getElementById('sub-price-note').value=sub.priceNote||'';
   document.getElementById('sub-type').value=subType(sub);
   updateAddTypeSelection(sub.category||'Other Subscription');
+  updatePriceModeFields();
   document.getElementById('sub-account').value=sub.account||'';
   document.getElementById('sub-currency').value=sub.currency||'USD';
   document.getElementById('sub-cycle').value=sub.cycle||'monthly';
@@ -1903,6 +1985,10 @@ function selEmoji(btn){
 async function saveSub(){
   var name=document.getElementById('sub-name').value.trim();
   var price=parseFloat(document.getElementById('sub-price').value);
+  var priceMode=document.getElementById('sub-price-mode').value;
+  var actualPriceRaw=document.getElementById('sub-actual-price').value;
+  var actualPrice=actualPriceRaw==='' ? null : parseFloat(actualPriceRaw);
+  var priceNote=document.getElementById('sub-price-note').value.trim();
   var currency=document.getElementById('sub-currency').value;
   var cycle=document.getElementById('sub-cycle').value;
   var date=document.getElementById('sub-date').value;
@@ -1916,12 +2002,20 @@ async function saveSub(){
     toast('Please choose the next due date', 'error');
     return;
   }
+  if(['fixed','actual','variable'].indexOf(priceMode) === -1){
+    toast('Please choose a valid amount mode', 'error');
+    return;
+  }
+  if(priceMode !== 'fixed' && (Number.isNaN(actualPrice) || actualPrice === null || actualPrice < 0)){
+    toast('Please enter the actual or estimated amount to use in totals', 'error');
+    return;
+  }
   if(['weekly','monthly','quarterly','yearly'].indexOf(cycle) === -1){
     toast('Please choose a valid billing cycle', 'error');
     return;
   }
 
-  var payload={name:name,price:price,currency:currency,cycle:cycle,nextDate:date,category:category,emoji:selEmoji_,account:account};
+  var payload={name:name,price:price,priceMode:priceMode,actualPrice:actualPrice,priceNote:priceNote,currency:currency,cycle:cycle,nextDate:date,category:category,emoji:selEmoji_,account:account};
   setButtonBusy('add-submit-btn', true, editId ? 'Saving...' : 'Adding...', editId ? 'Save Item' : 'Add Item');
   try {
     if(currentUser){
@@ -1965,17 +2059,25 @@ function openDetail(id){
   var days=dL(sub);
   var pct=elap(sub);
   var badgeClass=days!==null&&days<=3?'danger':days!==null&&days<=7?'warn':'';
+  var noteBox = document.getElementById('d-price-note-box');
   document.getElementById('d-icon').textContent=sub.emoji;
   document.getElementById('d-name').textContent=sub.name;
   document.getElementById('d-price').textContent=fmtD(moUSD(sub))+'/mo';
-  document.getElementById('d-orig').textContent=sc!==disp?'Originally '+fmtO(sub.price,sc):'';
+  document.getElementById('d-orig').textContent=sub.priceMode !== 'fixed'
+    ? priceModeLabel(sub.priceMode)+(sc!==disp ? ' • ref '+fmtO(sub.price,sc) : '')
+    : (sc!==disp ? 'Originally '+fmtO(sub.price,sc) : '');
   document.getElementById('d-cycle-lbl').textContent=typeLabel(type)+' • billed '+sub.cycle;
+  document.getElementById('d-ref-price-label').textContent=sub.priceMode === 'fixed' ? 'Price' : 'Reference Price';
   document.getElementById('d-orig-price').textContent=fmtO(sub.price,sc);
+  document.getElementById('d-amount-used').textContent=fmtO(effectiveAmount(sub), sc);
+  document.getElementById('d-price-mode').textContent=priceModeLabel(sub.priceMode);
   document.getElementById('d-cycle').textContent=cap(sub.cycle);
   document.getElementById('d-cat').textContent=sub.category+' • '+itemLabel(sub);
   var dab = document.getElementById('d-account-box');
   document.getElementById('d-account').textContent=sub.account||'-';
   if(dab) dab.style.display = sub.account ? '' : 'none';
+  document.getElementById('d-price-note').textContent=sub.priceNote||'-';
+  if(noteBox) noteBox.style.display = sub.priceNote ? '' : 'none';
   document.getElementById('d-next').textContent=sub.nextDate?new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'-';
   document.getElementById('d-days').innerHTML=days!==null?'<span class="badge '+badgeClass+'">in '+days+' days</span>':'-';
   document.getElementById('d-pct').textContent=pct+'% elapsed';
@@ -2064,8 +2166,11 @@ function tgMsg(sub){
     sub.emoji+' <b>'+sub.name+'</b>\n'+
     '⏰ Renews in <b>'+( days !== null ? days : '?' )+'</b> day(s)\n'+
     '📅 '+dateStr+'\n'+
-    '💰 '+fmtD(moUSD(sub))+'/mo'+(sub.currency!==disp ? ' ('+fmtO(sub.price,sub.currency||'USD')+')' : '')+
+    '💰 '+fmtD(moUSD(sub))+'/mo'+(sub.currency!==disp || sub.priceMode !== 'fixed' ? ' ('+fmtO(effectiveAmount(sub),sub.currency||'USD')+')' : '')+
+    (sub.priceMode !== 'fixed' ? '\n🧮 '+priceModeLabel(sub.priceMode) : '')+
+    (sub.priceMode !== 'fixed' ? '\n📌 Ref: '+fmtO(sub.price,sub.currency||'USD') : '')+
     (sub.account ? '\n👤 '+sub.account : '')+
+    (sub.priceNote ? '\n📝 '+sub.priceNote : '')+
     '\n\n<i>Sent from SubKit</i>';
 }
 
@@ -2161,7 +2266,9 @@ function sendDetailReminder(){
       to_email: EJS.email,
       sub_name: sub.name,
       sub_price: fmtD(moUSD(sub))+'/mo',
-      sub_orig: fmtO(sub.price, sub.currency||'USD'),
+      sub_orig: sub.priceMode !== 'fixed'
+        ? fmtO(effectiveAmount(sub), sub.currency||'USD')+' • Ref '+fmtO(sub.price, sub.currency||'USD')
+        : fmtO(sub.price, sub.currency||'USD'),
       renewal_date: sub.nextDate ? new Date(sub.nextDate).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : '-',
       days_left: days !== null ? String(days) : '-',
       sub_emoji: sub.emoji
@@ -2181,9 +2288,12 @@ function sendDetailReminder(){
     var body = encodeURIComponent(
       sub.emoji+' '+sub.name+'\n\n'+
       'Renewal date: '+dateStr+'\n'+
-      'Amount: '+fmtO(sub.price, sub.currency||'USD')+' ('+fmtD(moUSD(sub))+'/mo)\n'+
+      'Amount used: '+fmtO(effectiveAmount(sub), sub.currency||'USD')+' ('+fmtD(moUSD(sub))+'/mo)\n'+
+      (sub.priceMode !== 'fixed' ? 'Reference: '+fmtO(sub.price, sub.currency||'USD')+'\n' : '')+
+      (sub.priceMode !== 'fixed' ? 'Pricing mode: '+priceModeLabel(sub.priceMode)+'\n' : '')+
       'Billing cycle: '+cap(sub.cycle)+'\n'+
       (sub.account ? 'Account: '+sub.account+'\n' : '')+
+      (sub.priceNote ? 'Pricing note: '+sub.priceNote+'\n' : '')+
       '\n— Sent from SubKit'
     );
     window.location.href = 'mailto:?subject='+subject+'&body='+body;
@@ -2321,9 +2431,21 @@ function dlFile(name, content, type){
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 function exportCSV(){
-  var rows=['Name,Account,Original Price,Currency,Monthly ('+disp+'),Cycle,Next Date,Category'];
+  var rows=['Name,Account,Reference Price,Amount Mode,Actual/Estimated Amount,Pricing Note,Currency,Monthly ('+disp+'),Cycle,Next Date,Category'];
   subs.forEach(function(sub){
-    rows.push(['"'+String(sub.name).replace(/"/g,'""')+'"', '"'+String(sub.account||'').replace(/"/g,'""')+'"', sub.price, sub.currency||'USD', fmtD(moUSD(sub)).replace(',',''), sub.cycle, sub.nextDate||'', '"'+String(sub.category).replace(/"/g,'""')+'"'].join(','));
+    rows.push([
+      '"'+String(sub.name).replace(/"/g,'""')+'"',
+      '"'+String(sub.account||'').replace(/"/g,'""')+'"',
+      sub.price,
+      '"'+String(sub.priceMode||'fixed').replace(/"/g,'""')+'"',
+      sub.actualPrice != null ? sub.actualPrice : '',
+      '"'+String(sub.priceNote||'').replace(/"/g,'""')+'"',
+      sub.currency||'USD',
+      fmtD(moUSD(sub)).replace(',',''),
+      sub.cycle,
+      sub.nextDate||'',
+      '"'+String(sub.category).replace(/"/g,'""')+'"'
+    ].join(','));
   });
   rows.push('');
   rows.push('"TOTAL",,,,"'+fmtD(totUSD())+'",,,');
@@ -2338,7 +2460,7 @@ function exportText(){
   var lines=['📦 SubKit - '+new Date().toLocaleDateString(),'Total monthly: '+fmtD(totUSD()),''];
   subs.forEach(function(sub){
     var sc=sub.currency||'USD';
-    lines.push('• '+sub.emoji+' '+sub.name+'\n  '+fmtO(sub.price,sc)+'/'+sub.cycle+' -> '+fmtD(moUSD(sub))+'/mo'+(sub.nextDate?'\n  Next: '+new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''));
+    lines.push('• '+sub.emoji+' '+sub.name+'\n  '+fmtO(effectiveAmount(sub),sc)+'/'+sub.cycle+' -> '+fmtD(moUSD(sub))+'/mo'+(sub.priceMode!=='fixed' ? '\n  Reference: '+fmtO(sub.price,sc)+' · '+priceModeLabel(sub.priceMode) : '')+(sub.priceNote?'\n  Note: '+sub.priceNote:'')+(sub.nextDate?'\n  Next: '+new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''));
   });
   var txt=lines.join('\n');
   if(navigator.clipboard&&navigator.clipboard.writeText){
@@ -2395,7 +2517,9 @@ function sendReminderEmail(sub){
     to_email: EJS.email,
     sub_name: sub.name,
     sub_price: fmtD(moUSD(sub))+'/mo',
-    sub_orig: fmtO(sub.price, sub.currency||'USD'),
+    sub_orig: sub.priceMode !== 'fixed'
+      ? fmtO(effectiveAmount(sub), sub.currency||'USD')+' • Ref '+fmtO(sub.price, sub.currency||'USD')
+      : fmtO(sub.price, sub.currency||'USD'),
     renewal_date: sub.nextDate ? new Date(sub.nextDate).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : '-',
     days_left: days !== null ? days : '-',
     sub_emoji: sub.emoji
@@ -2657,6 +2781,7 @@ if(EJS.pubKey) try { emailjs.init(EJS.pubKey); } catch (e) {}
 applyTheme();
 applyFont();
 updateAddTypeSelection('Entertainment');
+updatePriceModeFields();
 updatePriceCurrency();
 
 if('serviceWorker' in navigator){
