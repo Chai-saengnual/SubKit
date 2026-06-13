@@ -969,6 +969,12 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
 <button class="emoji-btn" data-emoji="📰" onclick="selEmoji(this)">📰</button>
 <button class="emoji-btn" data-emoji="🔐" onclick="selEmoji(this)">🔐</button>
 <button class="emoji-btn" data-emoji="🤖" onclick="selEmoji(this)">🤖</button>
+<button class="emoji-btn" data-emoji="🔌" onclick="selEmoji(this)">🔌</button>
+<button class="emoji-btn" data-emoji="⚡" onclick="selEmoji(this)">⚡</button>
+<button class="emoji-btn" data-emoji="💧" onclick="selEmoji(this)">💧</button>
+<button class="emoji-btn" data-emoji="💳" onclick="selEmoji(this)">💳</button>
+<button class="emoji-btn" data-emoji="🧾" onclick="selEmoji(this)">🧾</button>
+<button class="emoji-btn" data-emoji="📦" onclick="selEmoji(this)">📦</button>
 <button class="emoji-btn" data-emoji="👨‍💻" onclick="selEmoji(this)">👨‍💻</button>
 <button class="emoji-btn" data-emoji="🍎" onclick="selEmoji(this)">🍎</button>
 <button class="emoji-btn" data-emoji="▶️" onclick="selEmoji(this)">▶️</button>
@@ -991,7 +997,7 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
     <div class="form-row">
       <div class="form-group">
         <label class="form-label" id="sub-category-label">Category</label>
-        <select class="form-select" id="sub-category"></select>
+        <select class="form-select" id="sub-category" onchange="handleCategoryChange()"></select>
       </div>
     </div>
     <div class="form-group">
@@ -1132,6 +1138,7 @@ var subsSearch = '';
 var subsTypeFilter = 'all';
 var subsSort = 'next-renewal';
 var selEmoji_ = '📺';
+var iconManuallySelected = false;
 var curDetail = null;
 var editId = null;
 var calOff = 0;
@@ -1240,6 +1247,20 @@ function typeLabel(type){ return type === 'bill' ? 'Bills & Utilities' : 'Subscr
 function itemLabel(sub){ return subType(sub) === 'bill' ? 'Bill' : 'Subscription'; }
 function dueLabel(sub){ return subType(sub) === 'bill' ? 'Due' : 'Renewal'; }
 function dueDateLabel(type){ return type === 'bill' ? 'Next Due Date' : 'Next Renewal Date'; }
+function defaultEmojiForCategory(category, type){
+  if(category === 'Electric Bill') return '⚡';
+  if(category === 'Water Bill') return '💧';
+  if(category === 'Credit Card Reminder') return '💳';
+  if(category === 'Utilities') return '🔌';
+  if(category === 'Entertainment') return '📺';
+  if(category === 'Productivity') return '💻';
+  if(category === 'AI Tools') return '🤖';
+  if(category === 'Gaming') return '🎮';
+  if(category === 'News') return '📰';
+  if(category === 'Other Bill') return '🧾';
+  if(category === 'Other Subscription') return '📦';
+  return type === 'bill' ? '🧾' : '📺';
+}
 function totalByType(type){
   return subs.reduce(function(sum, item){
     return subType(item) === type ? sum + moUSD(item) : sum;
@@ -1364,6 +1385,19 @@ function setAuthFeedback(message, type){
   el.textContent = message;
   el.style.color = type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--green)' : 'var(--muted)';
 }
+function syncEmojiButtons(){
+  document.querySelectorAll('.emoji-btn').forEach(function(btn){
+    btn.classList.toggle('selected', btn.dataset.emoji===selEmoji_);
+  });
+}
+function applySuggestedEmoji(force){
+  var typeEl = document.getElementById('sub-type');
+  var catEl = document.getElementById('sub-category');
+  if(!typeEl || !catEl) return;
+  if(iconManuallySelected && !force) return;
+  selEmoji_ = defaultEmojiForCategory(catEl.value, typeEl.value || 'subscription');
+  syncEmojiButtons();
+}
 function buildCategoryOptions(type, selectedValue){
   var options = (TRACKING_CATEGORY_OPTIONS[type] || TRACKING_CATEGORY_OPTIONS.subscription).slice();
   if(selectedValue && options.indexOf(selectedValue) === -1) options.push(selectedValue);
@@ -1388,6 +1422,10 @@ function updateAddTypeSelection(selectedCategory){
     catEl.value = (TRACKING_CATEGORY_OPTIONS[type] || TRACKING_CATEGORY_OPTIONS.subscription)[0];
   }
   updateDateFieldLabel();
+  applySuggestedEmoji(false);
+}
+function handleCategoryChange(){
+  applySuggestedEmoji(false);
 }
 function renderImportBanner(){
   var banner = document.getElementById('import-banner');
@@ -1805,6 +1843,7 @@ function resetAddForm(){
   var d=new Date();
   d.setDate(d.getDate()+30);
   editId=null;
+  iconManuallySelected=false;
   selEmoji_='📺';
   document.getElementById('add-modal-title').textContent='Add Item';
   document.getElementById('sub-name').value='';
@@ -1816,9 +1855,7 @@ function resetAddForm(){
   document.getElementById('sub-date').value=d.toISOString().split('T')[0];
   updateAddTypeSelection('Entertainment');
   document.getElementById('add-submit-btn').textContent='Add Item';
-  document.querySelectorAll('.emoji-btn').forEach(function(btn){
-    btn.classList.toggle('selected', btn.dataset.emoji===selEmoji_);
-  });
+  syncEmojiButtons();
   updatePriceCurrency();
 }
 function updatePriceCurrency(){
@@ -1837,6 +1874,7 @@ function openEditModal(id){
   if(!sub) return;
   editId=id;
   selEmoji_=sub.emoji||'📺';
+  iconManuallySelected = selEmoji_ !== defaultEmojiForCategory(sub.category||'', subType(sub));
   document.getElementById('add-modal-title').textContent='Edit Item';
   document.getElementById('sub-name').value=sub.name||'';
   document.getElementById('sub-price').value=sub.price;
@@ -1847,9 +1885,7 @@ function openEditModal(id){
   document.getElementById('sub-cycle').value=sub.cycle||'monthly';
   document.getElementById('sub-date').value=sub.nextDate||'';
   document.getElementById('add-submit-btn').textContent='Save Item';
-  document.querySelectorAll('.emoji-btn').forEach(function(btn){
-    btn.classList.toggle('selected', btn.dataset.emoji===selEmoji_);
-  });
+  syncEmojiButtons();
   updatePriceCurrency();
   document.getElementById('detail-modal').classList.remove('open');
   document.getElementById('add-modal').classList.add('open');
@@ -1862,6 +1898,7 @@ function selEmoji(btn){
   document.querySelectorAll('.emoji-btn').forEach(function(b){ b.classList.remove('selected'); });
   btn.classList.add('selected');
   selEmoji_ = btn.dataset.emoji;
+  iconManuallySelected = true;
 }
 async function saveSub(){
   var name=document.getElementById('sub-name').value.trim();
