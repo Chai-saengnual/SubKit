@@ -856,6 +856,30 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
             </div>
           </div>
         </div>
+
+        <!-- TELEGRAM REMINDERS -->
+        <div class="settings-section full">
+          <div class="settings-section-title">📱 Telegram Reminders</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6">
+            Send reminders directly to your Telegram. Create a bot via <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" style="color:var(--cyan)">@BotFather</a>, paste the token below, then click <strong style="color:var(--text)">Get Chat ID</strong> after sending any message to your bot.
+          </p>
+          <div class="form-group">
+            <label class="form-label">Bot Token</label>
+            <input class="settings-input" type="text" id="tg-token" placeholder="123456789:ABCdefGhIjKlmNoPQRstuVWXyz" />
+          </div>
+          <div class="form-group" style="margin-top:12px">
+            <label class="form-label">Chat ID</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input class="settings-input" type="text" id="tg-chatid" placeholder="e.g. 123456789" style="flex:1;margin:0" />
+              <button class="btn-test" style="margin:0;white-space:nowrap" onclick="fetchTgChatId()">🔍 Get Chat ID</button>
+            </div>
+            <p style="font-size:11px;color:var(--muted);margin-top:6px" id="tg-chatid-status"></p>
+          </div>
+          <button class="btn-save" onclick="saveTelegramSettings()">💾 Save Telegram Settings</button>
+          <button class="btn-test" onclick="sendTestTelegram()">📱 Send Test Message</button>
+          <p style="font-size:11px;color:var(--muted);margin-top:12px" id="tg-save-status"></p>
+        </div>
+
       </div>
     </div>
 
@@ -1018,7 +1042,10 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
       <div id="invoice-signin-msg" style="display:none;font-size:12px;color:var(--muted);text-align:center;padding:10px 0">Sign in to upload &amp; store invoices</div>
     </div>
 
-    <button id="detail-remind-btn" class="btn-secondary" style="margin-bottom:10px;width:100%" onclick="sendDetailReminder()">📧 Send Reminder Email</button>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button id="detail-remind-btn" class="btn-secondary" style="flex:1;margin:0" onclick="sendDetailReminder()">📧 Email</button>
+      <button id="detail-tg-btn" class="btn-secondary" style="flex:1;margin:0" onclick="sendDetailTelegram()">📱 Telegram</button>
+    </div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="editCurrentSub()">Edit</button>
       <button class="btn-danger" onclick="deleteSub()">🗑 Remove</button>
@@ -1091,6 +1118,11 @@ var EJS = {
   pubKey:     localStorage.getItem('ejs-pubkey')   || '',
   email:      localStorage.getItem('ejs-email')    || '',
   days:       parseInt(localStorage.getItem('ejs-days') || '3', 10)
+};
+
+var TG = {
+  token:  localStorage.getItem('tg-token')  || '',
+  chatId: localStorage.getItem('tg-chatid') || ''
 };
 
 function esc(value){
@@ -1835,6 +1867,111 @@ async function markAsRenewed(){
   }
 }
 
+/* ── TELEGRAM ─────────────────────────────────────────────── */
+function tgReady(){ return !!(TG.token && TG.chatId); }
+
+function saveTelegramSettings(){
+  TG.token  = document.getElementById('tg-token').value.trim();
+  TG.chatId = document.getElementById('tg-chatid').value.trim();
+  localStorage.setItem('tg-token',  TG.token);
+  localStorage.setItem('tg-chatid', TG.chatId);
+  var st = document.getElementById('tg-save-status');
+  if(st){ st.textContent = '✓ Saved!'; setTimeout(function(){ st.textContent=''; }, 2500); }
+}
+
+function tgMsg(sub){
+  var days = dL(sub);
+  var dateStr = sub.nextDate
+    ? new Date(sub.nextDate).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})
+    : '—';
+  return '<b>⚡ SubKit Reminder</b>\n\n'+
+    sub.emoji+' <b>'+sub.name+'</b>\n'+
+    '⏰ Renews in <b>'+( days !== null ? days : '?' )+'</b> day(s)\n'+
+    '📅 '+dateStr+'\n'+
+    '💰 '+fmtD(moUSD(sub))+'/mo'+(sub.currency!==disp ? ' ('+fmtO(sub.price,sub.currency||'USD')+')' : '')+
+    (sub.account ? '\n👤 '+sub.account : '')+
+    '\n\n<i>Sent from SubKit</i>';
+}
+
+async function sendTelegramMsg(sub){
+  if(!tgReady()) return false;
+  var res = await fetch('https://api.telegram.org/bot'+TG.token+'/sendMessage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: TG.chatId, text: tgMsg(sub), parse_mode: 'HTML' })
+  });
+  var data = await res.json();
+  if(!data.ok) throw new Error(data.description || 'Telegram error');
+  return true;
+}
+
+async function sendTestTelegram(){
+  if(!TG.token || !TG.chatId){
+    toast('Save your Bot Token and Chat ID first', 'error');
+    return;
+  }
+  try {
+    var res = await fetch('https://api.telegram.org/bot'+TG.token+'/sendMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TG.chatId,
+        text: '<b>⚡ SubKit</b>\n\nTelegram reminders are working! You\'ll receive subscription renewal alerts here.',
+        parse_mode: 'HTML'
+      })
+    });
+    var data = await res.json();
+    if(!data.ok) throw new Error(data.description || 'Telegram error');
+    toast('📱 Test message sent!', 'success');
+  } catch(e){
+    toast('Telegram failed: '+(e.message||e), 'error');
+  }
+}
+
+async function fetchTgChatId(){
+  var token = document.getElementById('tg-token').value.trim();
+  if(!token){ toast('Enter your Bot Token first', 'error'); return; }
+  var st = document.getElementById('tg-chatid-status');
+  st.textContent = 'Fetching…';
+  try {
+    var res = await fetch('https://api.telegram.org/bot'+token+'/getUpdates');
+    var data = await res.json();
+    if(!data.ok) throw new Error(data.description||'Bad token');
+    var updates = data.result || [];
+    if(!updates.length){
+      st.textContent = '⚠ No messages found. Send any message to your bot first, then try again.';
+      return;
+    }
+    var chatId = String(updates[updates.length-1].message.chat.id);
+    document.getElementById('tg-chatid').value = chatId;
+    st.textContent = '✓ Chat ID found: '+chatId;
+  } catch(e){
+    st.textContent = '✗ Failed: '+(e.message||e);
+  }
+}
+
+async function sendDetailTelegram(){
+  if(!curDetail) return;
+  var sub = subs.find(function(s){ return s.id===curDetail; });
+  if(!sub) return;
+  if(!tgReady()){
+    toast('Set up Telegram in Settings first', 'error');
+    switchTab('settings', document.querySelector('[data-tab="settings"]'));
+    document.getElementById('detail-modal').classList.remove('open');
+    return;
+  }
+  setButtonBusy('detail-tg-btn', true, 'Sending…', '📱 Telegram');
+  try {
+    await sendTelegramMsg(sub);
+    toast('📱 Telegram reminder sent!', 'success');
+  } catch(e){
+    toast('Telegram failed: '+(e.message||e), 'error');
+  } finally {
+    setButtonBusy('detail-tg-btn', false, 'Sending…', '📱 Telegram');
+  }
+}
+/* ── /TELEGRAM ────────────────────────────────────────────── */
+
 /* ── DETAIL REMINDER ──────────────────────────────────────── */
 function sendDetailReminder(){
   if(!curDetail) return;
@@ -2144,13 +2281,13 @@ async function triggerServerReminders(){
   }
 }
 function checkAndSendReminders(){
-  if(!ejsReady()) return;
   var today=new Date().toISOString().split('T')[0];
   subs.forEach(function(sub){
     var days=dL(sub);
     if(days===null || days<0 || days>EJS.days) return;
     if(sub._lastRemind===today) return;
-    sendReminderEmail(sub);
+    if(ejsReady()) sendReminderEmail(sub);
+    if(tgReady()) sendTelegramMsg(sub).catch(function(e){ console.warn('TG remind failed:',e); });
   });
 }
 function renderReminders(){
@@ -2337,6 +2474,8 @@ if(EJS.templateId) document.getElementById('ejs-template').value = EJS.templateI
 if(EJS.pubKey) document.getElementById('ejs-pubkey').value = EJS.pubKey;
 if(EJS.email) document.getElementById('remind-email').value = EJS.email;
 document.getElementById('remind-days').value = EJS.days;
+if(TG.token)  document.getElementById('tg-token').value  = TG.token;
+if(TG.chatId) document.getElementById('tg-chatid').value = TG.chatId;
 document.getElementById('currency-desc-s').textContent = disp+' - '+C[disp].name;
 if(EJS.pubKey) try { emailjs.init(EJS.pubKey); } catch (e) {}
 
