@@ -569,7 +569,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
     </button>
     <button class="nav-item" onclick="switchTab('subs',this)" data-tab="subs">
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-      Subscriptions
+      Items
       <span class="badge-count" id="subs-badge" style="display:none">0</span>
     </button>
     <button class="nav-item" onclick="switchTab('calendar',this)" data-tab="calendar">
@@ -596,7 +596,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
     <div class="sidebar-bottom">
       <button class="add-btn-sidebar" onclick="openAddModal()">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Add Subscription
+        Add Item
       </button>
     </div>
   </aside>
@@ -608,14 +608,14 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
     <div class="main-header">
       <div>
         <div class="main-title" id="page-title">Dashboard</div>
-        <div class="main-subtitle" id="page-sub">Overview of all your subscriptions</div>
+        <div class="main-subtitle" id="page-sub">Overview of your subscriptions and bills</div>
       </div>
       <div class="header-actions">
         <button class="header-btn" onclick="openExportModal()">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Export
         </button>
-        <button class="header-btn primary" onclick="openAddModal()">+ Add Subscription</button>
+        <button class="header-btn primary" onclick="openAddModal()">+ Add Item</button>
       </div>
     </div>
 
@@ -623,7 +623,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
     <div class="screen active" id="screen-home">
       <div class="stat-grid">
         <div class="stat-card hero">
-          <div class="stat-label">Total Monthly Spend</div>
+          <div class="stat-label">All Recurring Costs</div>
           <div class="stat-value lg" id="total-display">$0.00</div>
           <div class="stat-meta">
 <span id="rate-pill" class="stat-pill" onclick="openCurrencyModal()" style="cursor:pointer">💱 USD</span>
@@ -631,39 +631,39 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Active Subscriptions</div>
+          <div class="stat-label">Subscriptions</div>
           <div class="stat-value cyan" id="stat-count">0</div>
-          <div class="stat-meta">tracked services</div>
+          <div class="stat-meta">active services</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Renewing Soon</div>
-          <div class="stat-value warn" id="stat-soon">0</div>
-          <div class="stat-meta">within 7 days</div>
+          <div class="stat-label">Bills &amp; Utilities</div>
+          <div class="stat-value warn" id="stat-bills">$0.00</div>
+          <div class="stat-meta">monthly equivalent</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Annual Estimate</div>
+          <div class="stat-label">Subscription Annual Estimate</div>
           <div class="stat-value green" id="stat-annual">$0.00</div>
-          <div class="stat-meta">per year</div>
+          <div class="stat-meta" id="stat-annual-meta">services only</div>
         </div>
       </div>
 
       <div class="section-head">
-        <div class="section-title">Upcoming Renewals</div>
+        <div class="section-title">Upcoming Charges</div>
 <div class="section-action" onclick="switchTab('calendar', document.querySelector('[data-tab=calendar]'))">View calendar -></div>
       </div>
       <div class="renewal-grid" id="renewal-grid">
-<div class="empty-state"><div class="empty-icon">🎉</div><h3>No renewals soon</h3><p>Nothing due in the next 30 days</p></div>
+<div class="empty-state"><div class="empty-icon">🎉</div><h3>No charges due soon</h3><p>Nothing due in the next 30 days</p></div>
       </div>
 
       <div class="section-head">
-        <div class="section-title">All Subscriptions</div>
+        <div class="section-title">All Tracked Items</div>
 <div class="section-action" onclick="switchTab('subs', document.querySelector('[data-tab=subs]'))">Manage all -></div>
       </div>
       <div class="table-header">
-        <div></div><div>Name</div><div>Price / mo</div><div>Next Renewal</div><div>Progress</div><div></div>
+        <div></div><div>Name</div><div>Price / mo</div><div>Next Due</div><div>Progress</div><div></div>
       </div>
       <div class="sub-list" id="home-sub-list">
-<div class="empty-state"><div class="empty-icon">📭</div><h3>No subscriptions yet</h3><p>Click "+ Add Subscription" to get started</p></div>
+<div class="empty-state"><div class="empty-icon">📭</div><h3>No items yet</h3><p>Click "+ Add Item" to get started</p></div>
       </div>
     </div>
 
@@ -671,8 +671,13 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
     <div class="screen" id="screen-subs">
       <div class="subs-toolbar">
         <input class="subs-search" id="subs-search" type="search" placeholder="Search by name, category, or currency" oninput="updateSubsFilters()" />
+        <select class="subs-sort" id="subs-type-filter" onchange="updateSubsFilters()">
+          <option value="all">Show: Everything</option>
+          <option value="subscription">Show: Subscriptions</option>
+          <option value="bill">Show: Bills &amp; Utilities</option>
+        </select>
         <select class="subs-sort" id="subs-sort" onchange="updateSubsFilters()">
-          <option value="next-renewal">Sort: Next renewal</option>
+          <option value="next-renewal">Sort: Next due</option>
           <option value="price-high">Sort: Highest monthly cost</option>
           <option value="price-low">Sort: Lowest monthly cost</option>
           <option value="name-az">Sort: Name A-Z</option>
@@ -680,10 +685,10 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
         </select>
       </div>
       <div class="table-header">
-        <div></div><div>Name</div><div>Price / mo</div><div>Next Renewal</div><div>Progress</div><div></div>
+        <div></div><div>Name</div><div>Price / mo</div><div>Next Due</div><div>Progress</div><div></div>
       </div>
       <div class="sub-list" id="subs-list">
-<div class="empty-state"><div class="empty-icon">📭</div><h3>No subscriptions yet</h3></div>
+<div class="empty-state"><div class="empty-icon">📭</div><h3>No items yet</h3></div>
       </div>
     </div>
 
@@ -713,17 +718,17 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
           <div class="stat-meta" id="an-meta">converted to display currency</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Avg per Sub</div>
+          <div class="stat-label">Avg per Item</div>
           <div class="stat-value cyan" id="an-avg">$0.00</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Most Expensive</div>
+          <div class="stat-label">Highest Monthly Cost</div>
 <div class="stat-value warn" id="an-top">-</div>
         </div>
       </div>
       <div class="analytics-grid">
         <div class="chart-card" style="grid-column:1/-1">
-          <div class="chart-title">Spend by Subscription</div>
+          <div class="chart-title">Spend by Item</div>
           <div id="chart-subs"></div>
         </div>
         <div class="chart-card">
@@ -796,7 +801,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
           <div class="settings-section-title">Cloud Sync</div>
           <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:16px;margin-bottom:14px">
             <div style="font-size:13px;font-weight:600;margin-bottom:6px" id="auth-status-title">Local-only mode</div>
-            <div style="font-size:12px;color:var(--muted);line-height:1.6" id="auth-status-copy">Sign in to store subscriptions in Supabase and sync them across devices.</div>
+            <div style="font-size:12px;color:var(--muted);line-height:1.6" id="auth-status-copy">Sign in to store your items in Supabase and sync them across devices.</div>
           </div>
           <div class="form-group">
             <label class="form-label">Email</label>
@@ -815,14 +820,14 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
           </div>
           <div style="margin-top:8px"><button onclick="sendPasswordReset()" style="background:none;border:none;color:var(--cyan);font-size:12px;cursor:pointer;padding:4px 0;font-family:var(--font-body);text-decoration:underline">Forgot password?</button></div>
           <div id="import-banner" style="display:none;background:var(--surface2);border:1px solid var(--muted2);border-radius:var(--radius-sm);padding:14px;margin-top:14px">
-            <div style="font-size:13px;font-weight:600;margin-bottom:6px">Local subscriptions found</div>
-            <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px" id="import-copy">You have subscriptions on this device that are not in cloud sync yet.</div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:6px">Local items found</div>
+            <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px" id="import-copy">You have items on this device that are not in cloud sync yet.</div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <button class="btn-save" id="import-local-btn" onclick="importLocalSubscriptions()">Import to Cloud</button>
               <button class="settings-select" id="dismiss-import-btn" onclick="dismissImportBanner()">Not Now</button>
             </div>
           </div>
-          <p style="font-size:11px;color:var(--muted);margin-top:12px" id="auth-feedback">Your existing local subscriptions will stay on this device until you sign in.</p>
+          <p style="font-size:11px;color:var(--muted);margin-top:12px" id="auth-feedback">Your existing local items will stay on this device until you sign in.</p>
         </div>
 
         <div class="settings-section">
@@ -943,7 +948,7 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
 <div class="modal-overlay" id="currency-modal" onclick="closeModal(event,'currency-modal')">
   <div class="modal-box">
 <div class="modal-title">Display Currency <button class="modal-close" onclick="document.getElementById('currency-modal').classList.remove('open')">✕</button></div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Each subscription stores its own currency. This controls what currency everything is displayed in.</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Each item stores its own currency. This controls what currency everything is displayed in.</p>
     <div id="currency-list"></div>
     <div style="text-align:center;margin-top:8px" id="rates-status"></div>
   </div>
@@ -952,9 +957,9 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
 <!-- ADD MODAL -->
 <div class="modal-overlay" id="add-modal" onclick="closeModal(event,'add-modal')">
   <div class="modal-box">
-<div class="modal-title"><span id="add-modal-title">Add Subscription</span> <button class="modal-close" onclick="closeAddModal()">✕</button></div>
+<div class="modal-title"><span id="add-modal-title">Add Item</span> <button class="modal-close" onclick="closeAddModal()">✕</button></div>
     <div class="form-group">
-      <label class="form-label">App Icon</label>
+      <label class="form-label">Service or Bill Icon</label>
       <div class="emoji-row">
 <button class="emoji-btn selected" data-emoji="📺" onclick="selEmoji(this)">📺</button>
 <button class="emoji-btn" data-emoji="🎵" onclick="selEmoji(this)">🎵</button>
@@ -972,23 +977,21 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Name</label>
-        <input class="form-input" type="text" id="sub-name" placeholder="Netflix, Spotify..." />
+        <label class="form-label">Tracking Type</label>
+        <select class="form-select" id="sub-type" onchange="updateAddTypeSelection()">
+          <option value="subscription">Subscription</option>
+          <option value="bill">Bill &amp; Utility</option>
+        </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Category</label>
-        <select class="form-select" id="sub-category">
-          <option value="Entertainment">Entertainment</option>
-          <option value="Productivity">Productivity</option>
-          <option value="Utilities">Utilities</option>
-          <option value="Electric Bill">Electric Bill</option>
-          <option value="Water Bill">Water Bill</option>
-          <option value="Credit Card Reminder">Credit Card Reminder</option>
-          <option value="AI Tools">AI Tools</option>
-          <option value="Gaming">Gaming</option>
-          <option value="News">News</option>
-          <option value="Other">Other</option>
-        </select>
+        <label class="form-label">Name</label>
+        <input class="form-input" type="text" id="sub-name" placeholder="Netflix, Spotify, Electric Bill..." />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label" id="sub-category-label">Category</label>
+        <select class="form-select" id="sub-category"></select>
       </div>
     </div>
     <div class="form-group">
@@ -1023,11 +1026,11 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Next Renewal Date</label>
+        <label class="form-label" id="sub-date-label">Next Renewal Date</label>
         <input class="form-input" type="date" id="sub-date" />
       </div>
     </div>
-    <button class="btn-primary" id="add-submit-btn" onclick="saveSub()">Add Subscription</button>
+    <button class="btn-primary" id="add-submit-btn" onclick="saveSub()">Add Item</button>
   </div>
 </div>
 
@@ -1108,7 +1111,7 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
   <div class="loading-card">
     <div class="loading-spinner"></div>
     <div class="loading-title" id="loading-title">Loading SubKit</div>
-    <div class="loading-copy" id="loading-copy">Checking your session and bringing in the latest subscription data.</div>
+    <div class="loading-copy" id="loading-copy">Checking your session and bringing in the latest item data.</div>
   </div>
 </div>
 
@@ -1126,6 +1129,7 @@ var subs = [];
 var currentUser = null;
 var isAppLoading = false;
 var subsSearch = '';
+var subsTypeFilter = 'all';
 var subsSort = 'next-renewal';
 var selEmoji_ = '📺';
 var curDetail = null;
@@ -1145,8 +1149,14 @@ var disp = localStorage.getItem('subkit-currency') || 'USD';
 var live = null;
 var coffeeMode = localStorage.getItem('subkit-coffeemode') !== '0';
 
-var pageTitles = {home:'Dashboard',subs:'Subscriptions',calendar:'Calendar',analytics:'Analytics',reminders:'Reminders',settings:'Settings'};
-var pageSubs = {home:'Overview of all your subscriptions',subs:'Manage all your tracked services',calendar:'Renewal calendar',analytics:'Spending breakdown & insights',reminders:'Email reminder configuration',settings:'App preferences & configuration'};
+var TRACKING_CATEGORY_OPTIONS = {
+  subscription: ['Entertainment', 'Productivity', 'AI Tools', 'Gaming', 'News', 'Other Subscription'],
+  bill: ['Utilities', 'Electric Bill', 'Water Bill', 'Credit Card Reminder', 'Other Bill']
+};
+var BILL_CATEGORIES = TRACKING_CATEGORY_OPTIONS.bill.slice();
+
+var pageTitles = {home:'Dashboard',subs:'Tracked Items',calendar:'Calendar',analytics:'Analytics',reminders:'Reminders',settings:'Settings'};
+var pageSubs = {home:'Overview of your subscriptions and bills',subs:'Manage subscriptions and bill reminders together',calendar:'Charge calendar',analytics:'Spending breakdown & insights',reminders:'Email reminder configuration',settings:'App preferences & configuration'};
 
 var EJS = {
   serviceId:  localStorage.getItem('ejs-service')  || '',
@@ -1224,6 +1234,20 @@ function moUSD(sub){
   return u;
 }
 function totUSD(){ return subs.reduce(function(sum, item){ return sum + moUSD(item); }, 0); }
+function categoryToType(category){ return BILL_CATEGORIES.indexOf(category) !== -1 ? 'bill' : 'subscription'; }
+function subType(sub){ return categoryToType((sub && sub.category) || ''); }
+function typeLabel(type){ return type === 'bill' ? 'Bills & Utilities' : 'Subscriptions'; }
+function itemLabel(sub){ return subType(sub) === 'bill' ? 'Bill' : 'Subscription'; }
+function dueLabel(sub){ return subType(sub) === 'bill' ? 'Due' : 'Renewal'; }
+function dueDateLabel(type){ return type === 'bill' ? 'Next Due Date' : 'Next Renewal Date'; }
+function totalByType(type){
+  return subs.reduce(function(sum, item){
+    return subType(item) === type ? sum + moUSD(item) : sum;
+  }, 0);
+}
+function countByType(type){
+  return subs.filter(function(item){ return subType(item) === type; }).length;
+}
 function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
 function dL(sub){ if(!sub.nextDate) return null; return Math.ceil((new Date(sub.nextDate) - new Date()) / 86400000); }
 function pDays(sub){ return sub.cycle==='yearly' ? 365 : sub.cycle==='quarterly' ? 90 : sub.cycle==='weekly' ? 7 : 30; }
@@ -1340,6 +1364,31 @@ function setAuthFeedback(message, type){
   el.textContent = message;
   el.style.color = type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--green)' : 'var(--muted)';
 }
+function buildCategoryOptions(type, selectedValue){
+  var options = (TRACKING_CATEGORY_OPTIONS[type] || TRACKING_CATEGORY_OPTIONS.subscription).slice();
+  if(selectedValue && options.indexOf(selectedValue) === -1) options.push(selectedValue);
+  return options.map(function(option){
+    return '<option value="'+esc(option)+'">'+esc(option)+'</option>';
+  }).join('');
+}
+function updateDateFieldLabel(){
+  var typeEl = document.getElementById('sub-type');
+  var label = document.getElementById('sub-date-label');
+  if(typeEl && label) label.textContent = dueDateLabel(typeEl.value);
+}
+function updateAddTypeSelection(selectedCategory){
+  var typeEl = document.getElementById('sub-type');
+  var catEl = document.getElementById('sub-category');
+  if(!typeEl || !catEl) return;
+  var type = typeEl.value || 'subscription';
+  catEl.innerHTML = buildCategoryOptions(type, selectedCategory);
+  if(selectedCategory){
+    catEl.value = selectedCategory;
+  } else {
+    catEl.value = (TRACKING_CATEGORY_OPTIONS[type] || TRACKING_CATEGORY_OPTIONS.subscription)[0];
+  }
+  updateDateFieldLabel();
+}
 function renderImportBanner(){
   var banner = document.getElementById('import-banner');
   var copy = document.getElementById('import-copy');
@@ -1356,7 +1405,7 @@ function renderImportBanner(){
     banner.style.display = 'none';
     return;
   }
-  copy.textContent = 'You have ' + localCount + ' subscription' + (localCount === 1 ? '' : 's') + ' on this device that are not in cloud sync yet.';
+  copy.textContent = 'You have ' + localCount + ' item' + (localCount === 1 ? '' : 's') + ' on this device that are not in cloud sync yet.';
   banner.style.display = 'block';
 }
 function renderAuthState(){
@@ -1365,13 +1414,13 @@ function renderAuthState(){
   var signOutBtn = document.getElementById('auth-signout-btn');
   if(currentUser){
     title.textContent = 'Cloud sync is on';
-    copy.textContent = currentUser.email + ' is connected. New subscriptions now save to Supabase.';
+    copy.textContent = currentUser.email + ' is connected. New items now save to Supabase.';
     title.style.color = 'var(--green)';
     signOutBtn.style.display = 'inline-flex';
     setAuthFeedback('Signed in. Changes now sync to the cloud.', 'success');
   } else {
     title.textContent = 'Local-only mode';
-    copy.textContent = 'Sign in to store subscriptions in Supabase and sync them across devices.';
+    copy.textContent = 'Sign in to store your items in Supabase and sync them across devices.';
     title.style.color = 'var(--text)';
     signOutBtn.style.display = 'none';
     setAuthFeedback('Your existing local subscriptions stay on this device until you sign in.', '');
@@ -1455,13 +1504,15 @@ function renderAll(){
 function filteredSubsList(){
   var query = subsSearch.trim().toLowerCase();
   var list = subs.filter(function(sub){
+    if(subsTypeFilter !== 'all' && subType(sub) !== subsTypeFilter) return false;
     if(!query) return true;
     return [
       sub.name || '',
       sub.category || '',
       sub.currency || '',
       sub.cycle || '',
-      sub.account || ''
+      sub.account || '',
+      typeLabel(subType(sub))
     ].join(' ').toLowerCase().indexOf(query) !== -1;
   });
   return list.slice().sort(function(a, b){
@@ -1476,16 +1527,18 @@ function filteredSubsList(){
 }
 function updateSubsFilters(){
   var searchEl = document.getElementById('subs-search');
+  var typeEl = document.getElementById('subs-type-filter');
   var sortEl = document.getElementById('subs-sort');
   subsSearch = searchEl ? searchEl.value : '';
+  subsTypeFilter = typeEl ? typeEl.value : 'all';
   subsSort = sortEl ? sortEl.value : 'next-renewal';
   renderSubsList();
 }
 function updateBadges(){
   var soon = subs.filter(function(s){ var days=dL(s); return days!==null && days>=0 && days<=7; }).length;
   var sb = document.getElementById('subs-badge');
-  sb.textContent = subs.length;
-  sb.style.display = subs.length ? '' : 'none';
+  sb.textContent = countByType('subscription');
+  sb.style.display = countByType('subscription') ? '' : 'none';
   var rb = document.getElementById('remind-badge');
   rb.textContent = soon;
   rb.style.display = soon ? '' : 'none';
@@ -1503,16 +1556,21 @@ function toggleCoffeeMode(){
 }
 function renderHome(){
   var total=totUSD();
+  var subscriptionTotal = totalByType('subscription');
+  var billTotal = totalByType('bill');
   var rate=getR(disp);
   var rateText=disp==='JPY' ? Math.round(rate) : rate.toFixed(2);
   document.getElementById('total-display').textContent = fmtD(total);
-  document.getElementById('stat-count').textContent = subs.length;
-  document.getElementById('stat-annual').textContent = fmtD(total * 12);
+  document.getElementById('stat-count').textContent = countByType('subscription');
+  document.getElementById('stat-bills').textContent = fmtD(billTotal);
+  document.getElementById('stat-annual').textContent = fmtD(subscriptionTotal * 12);
+  document.getElementById('stat-annual-meta').textContent = countByType('bill')
+    ? fmtD(billTotal * 12) + ' bills tracked separately'
+    : 'services only';
   var cpill = document.getElementById('coffee-pill');
   cpill.textContent = '= ' + coffees(total) + ' Coffee ☕';
   cpill.style.display = coffeeMode ? '' : 'none';
   document.getElementById('rate-pill').textContent = '💱 ' + disp + ' (1 USD ≈ ' + rateText + ')';
-  document.getElementById('stat-soon').textContent = subs.filter(function(s){ var days=dL(s); return days!==null && days>=0 && days<=7; }).length;
 
   var renewalGrid = document.getElementById('renewal-grid');
   var upcoming = subs.filter(function(s){
@@ -1521,7 +1579,7 @@ function renderHome(){
   }).sort(function(a,b){ return new Date(a.nextDate) - new Date(b.nextDate); });
 
   if(!upcoming.length){
-    renewalGrid.innerHTML = '<div class="empty-state" style="padding:30px"><div class="empty-icon">🎉</div><h3>No renewals soon</h3></div>';
+    renewalGrid.innerHTML = '<div class="empty-state" style="padding:30px"><div class="empty-icon">🎉</div><h3>No charges due soon</h3></div>';
   } else {
     renewalGrid.innerHTML = upcoming.map(function(sub){
       var days = dL(sub);
@@ -1531,7 +1589,7 @@ function renderHome(){
         '<div class="renewal-card-top"><div class="renewal-card-icon">'+esc(sub.emoji)+'</div>'+
         '<div><div class="renewal-card-price">'+fmtD(moUSD(sub))+'</div>'+(sc!==disp?'<div class="renewal-card-orig">'+fmtO(sub.price,sc)+'</div>':'')+'</div></div>'+
         '<div class="renewal-card-name">'+esc(sub.name)+'</div>'+
-        '<div class="renewal-card-date"><span class="badge '+badgeClass+'">'+days+' days left</span> · '+new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})+'</div></div>';
+        '<div class="renewal-card-date"><span class="badge '+badgeClass+'">'+days+' days left</span> · '+new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' · '+itemLabel(sub)+'</div></div>';
     }).join('');
   }
 
@@ -1540,7 +1598,7 @@ function renderHome(){
 function renderSubListEl(elId, list){
   var el = document.getElementById(elId);
   if(!list.length){
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><h3>No subscriptions yet</h3></div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><h3>No items yet</h3></div>';
     return;
   }
   el.innerHTML = list.map(function(sub){
@@ -1549,11 +1607,12 @@ function renderSubListEl(elId, list){
     var sc = sub.currency || 'USD';
     var fillClass = days!==null && days<=3 ? 'danger' : days!==null && days<=7 ? 'warn' : '';
     var dateStr = sub.nextDate ? new Date(sub.nextDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '-';
+    var typePill = '<span style="margin-left:6px;color:var(--accent);font-size:10px;opacity:.85">'+esc(itemLabel(sub))+'</span>';
     return '<div class="sub-row" onclick="openDetail(\''+esc(sub.id)+'\')">'+
       '<div class="sub-row-icon">'+esc(sub.emoji)+'</div>'+
-      '<div><div class="sub-row-name">'+esc(sub.name)+'</div><div class="sub-row-cat">'+esc(sub.category)+(sub.account?'<span style="margin-left:6px;color:var(--accent);font-size:10px;opacity:.8">'+esc(sub.account)+'</span>':'')+'</div></div>'+
+      '<div><div class="sub-row-name">'+esc(sub.name)+'</div><div class="sub-row-cat">'+esc(sub.category)+typePill+(sub.account?'<span style="margin-left:6px;color:var(--accent);font-size:10px;opacity:.8">'+esc(sub.account)+'</span>':'')+'</div></div>'+
       '<div><div class="sub-row-price">'+fmtD(moUSD(sub))+'/mo</div>'+(sc!==disp?'<div class="sub-row-orig">'+fmtO(sub.price,sc)+'</div>':'')+'</div>'+
-      '<div class="sub-row-date">'+dateStr+(days!==null?'<br><span class="badge '+fillClass+'" style="margin-top:4px">'+days+'d</span>':'')+'</div>'+
+      '<div class="sub-row-date">'+dateStr+(days!==null?'<br><span class="badge '+fillClass+'" style="margin-top:4px">'+dueLabel(sub)+' · '+days+'d</span>':'')+'</div>'+
       '<div class="sub-row-bar"><div class="sub-row-days">'+pct+'% elapsed</div><div class="progress-bar"><div class="progress-fill '+fillClass+'" style="width:'+pct+'%"></div></div></div>'+
       '<div class="sub-row-actions"><span style="color:var(--muted);font-size:18px">></span></div></div>';
   }).join('');
@@ -1564,9 +1623,9 @@ function renderCalendarDueList(list, selectedDate, monthDate){
   var el=document.getElementById('cal-sub-list');
   if(!list.length){
     if(selectedDate){
-      el.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><h3>No renewals due</h3><p>No subscriptions renew on '+new Date(selectedDate).toLocaleDateString('en-US',{month:'long',day:'numeric'})+'.</p></div>';
+      el.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><h3>No charges due</h3><p>No items are scheduled on '+new Date(selectedDate).toLocaleDateString('en-US',{month:'long',day:'numeric'})+'.</p></div>';
     } else {
-      el.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><h3>No renewals this month</h3><p>No subscriptions are scheduled in '+monthDate.toLocaleDateString('en-US',{month:'long',year:'numeric'})+'.</p></div>';
+      el.innerHTML='<div class="empty-state"><div class="empty-icon">📭</div><h3>No charges this month</h3><p>No items are scheduled in '+monthDate.toLocaleDateString('en-US',{month:'long',year:'numeric'})+'.</p></div>';
     }
     return;
   }
@@ -1578,7 +1637,7 @@ function renderCalendarDueList(list, selectedDate, monthDate){
         '<div class="sub-row-icon">'+esc(sub.emoji)+'</div>'+
         '<div class="calendar-due-meta">'+
           '<div class="calendar-due-name">'+esc(sub.name)+'</div>'+
-          '<div class="calendar-due-sub">'+renewalText+' · '+esc(sub.category)+' · '+cap(sub.cycle)+'</div>'+
+          '<div class="calendar-due-sub">'+renewalText+' · '+esc(sub.category)+' · '+itemLabel(sub)+' · '+cap(sub.cycle)+'</div>'+
         '</div>'+
       '</div>'+
       '<div class="calendar-due-price">'+
@@ -1625,8 +1684,8 @@ function renderCalendar(){
     return date.getMonth()===monthDate.getMonth() && date.getFullYear()===monthDate.getFullYear();
   }).sort(function(a,b){ return new Date(a.nextDate) - new Date(b.nextDate); });
   document.getElementById('cal-selected-title').textContent = showDate
-    ? 'Subscriptions due on ' + new Date(showDate).toLocaleDateString('en-US',{month:'long',day:'numeric'})
-    : 'Renewals in ' + monthDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+    ? 'Charges due on ' + new Date(showDate).toLocaleDateString('en-US',{month:'long',day:'numeric'})
+    : 'Charges in ' + monthDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
   renderCalendarDueList(filtered, showDate, monthDate);
 }
 function changeMonth(dir){ calOff += dir; calSel = null; renderCalendar(); }
@@ -1701,7 +1760,7 @@ function renderTrendChart(){
   var months = buildProjectedMonthly();
   var max = Math.max.apply(null, months.map(function(m){ return m.total; }));
   if(!max){
-    el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:8px 0">Add subscriptions to see projected charges</div>';
+    el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:8px 0">Add items to see projected charges</div>';
     return;
   }
   var barColors = ['#4dd8e8','#4ddc9a','#ffa64d','#ff5f7a','#b08dff','#f9ca24'];
@@ -1747,15 +1806,16 @@ function resetAddForm(){
   d.setDate(d.getDate()+30);
   editId=null;
   selEmoji_='📺';
-  document.getElementById('add-modal-title').textContent='Add Subscription';
+  document.getElementById('add-modal-title').textContent='Add Item';
   document.getElementById('sub-name').value='';
   document.getElementById('sub-price').value='';
-  document.getElementById('sub-category').value='Entertainment';
+  document.getElementById('sub-type').value='subscription';
   document.getElementById('sub-account').value='';
   document.getElementById('sub-currency').value=disp in C ? disp : 'USD';
   document.getElementById('sub-cycle').value='monthly';
   document.getElementById('sub-date').value=d.toISOString().split('T')[0];
-  document.getElementById('add-submit-btn').textContent='Add Subscription';
+  updateAddTypeSelection('Entertainment');
+  document.getElementById('add-submit-btn').textContent='Add Item';
   document.querySelectorAll('.emoji-btn').forEach(function(btn){
     btn.classList.toggle('selected', btn.dataset.emoji===selEmoji_);
   });
@@ -1777,15 +1837,16 @@ function openEditModal(id){
   if(!sub) return;
   editId=id;
   selEmoji_=sub.emoji||'📺';
-  document.getElementById('add-modal-title').textContent='Edit Subscription';
+  document.getElementById('add-modal-title').textContent='Edit Item';
   document.getElementById('sub-name').value=sub.name||'';
   document.getElementById('sub-price').value=sub.price;
-  document.getElementById('sub-category').value=sub.category||'Other';
+  document.getElementById('sub-type').value=subType(sub);
+  updateAddTypeSelection(sub.category||'Other Subscription');
   document.getElementById('sub-account').value=sub.account||'';
   document.getElementById('sub-currency').value=sub.currency||'USD';
   document.getElementById('sub-cycle').value=sub.cycle||'monthly';
   document.getElementById('sub-date').value=sub.nextDate||'';
-  document.getElementById('add-submit-btn').textContent='Save Changes';
+  document.getElementById('add-submit-btn').textContent='Save Item';
   document.querySelectorAll('.emoji-btn').forEach(function(btn){
     btn.classList.toggle('selected', btn.dataset.emoji===selEmoji_);
   });
@@ -1815,7 +1876,7 @@ async function saveSub(){
     return;
   }
   if(!date){
-    toast('Please choose the next renewal date', 'error');
+    toast('Please choose the next due date', 'error');
     return;
   }
   if(['weekly','monthly','quarterly','yearly'].indexOf(cycle) === -1){
@@ -1824,7 +1885,7 @@ async function saveSub(){
   }
 
   var payload={name:name,price:price,currency:currency,cycle:cycle,nextDate:date,category:category,emoji:selEmoji_,account:account};
-  setButtonBusy('add-submit-btn', true, editId ? 'Saving...' : 'Adding...', editId ? 'Save Changes' : 'Add Subscription');
+  setButtonBusy('add-submit-btn', true, editId ? 'Saving...' : 'Adding...', editId ? 'Save Item' : 'Add Item');
   try {
     if(currentUser){
       if(editId){
@@ -1853,16 +1914,16 @@ async function saveSub(){
     resetAddForm();
   } catch (error) {
     console.error('saveSub failed', error);
-    toast('Could not save subscription: ' + (error && (error.message || error.details || error.hint) ? (error.message || error.details || error.hint) : 'unknown error'), 'error');
+    toast('Could not save item: ' + (error && (error.message || error.details || error.hint) ? (error.message || error.details || error.hint) : 'unknown error'), 'error');
   } finally {
-    setButtonBusy('add-submit-btn', false, editId ? 'Saving...' : 'Adding...', editId ? 'Save Changes' : 'Add Subscription');
+    setButtonBusy('add-submit-btn', false, editId ? 'Saving...' : 'Adding...', editId ? 'Save Item' : 'Add Item');
   }
 }
-
 function openDetail(id){
   var sub=subs.find(function(item){ return item.id===id; });
   if(!sub) return;
   curDetail=id;
+  var type=subType(sub);
   var sc=sub.currency||'USD';
   var days=dL(sub);
   var pct=elap(sub);
@@ -1871,10 +1932,10 @@ function openDetail(id){
   document.getElementById('d-name').textContent=sub.name;
   document.getElementById('d-price').textContent=fmtD(moUSD(sub))+'/mo';
   document.getElementById('d-orig').textContent=sc!==disp?'Originally '+fmtO(sub.price,sc):'';
-  document.getElementById('d-cycle-lbl').textContent='Billed '+sub.cycle;
+  document.getElementById('d-cycle-lbl').textContent=typeLabel(type)+' • billed '+sub.cycle;
   document.getElementById('d-orig-price').textContent=fmtO(sub.price,sc);
   document.getElementById('d-cycle').textContent=cap(sub.cycle);
-  document.getElementById('d-cat').textContent=sub.category;
+  document.getElementById('d-cat').textContent=sub.category+' • '+itemLabel(sub);
   var dab = document.getElementById('d-account-box');
   document.getElementById('d-account').textContent=sub.account||'-';
   if(dab) dab.style.display = sub.account ? '' : 'none';
@@ -1902,7 +1963,7 @@ function openDetail(id){
 function editCurrentSub(){ if(curDetail) openEditModal(curDetail); }
 async function deleteSub(){
   if(!curDetail) return;
-  if(!confirm('Remove this subscription?')) return;
+  if(!confirm('Remove this item?')) return;
   var sub=subs.find(function(item){ return item.id===curDetail; });
   if(!sub) return;
   try {
@@ -1917,7 +1978,7 @@ async function deleteSub(){
     renderCalendar();
     toast('Removed '+sub.name, 'success');
   } catch (error) {
-    toast('Could not remove subscription', 'error');
+    toast('Could not remove item', 'error');
   }
 }
 
@@ -2558,6 +2619,8 @@ document.getElementById('currency-desc-s').textContent = disp+' - '+C[disp].name
 if(EJS.pubKey) try { emailjs.init(EJS.pubKey); } catch (e) {}
 applyTheme();
 applyFont();
+updateAddTypeSelection('Entertainment');
+updatePriceCurrency();
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', function(){
