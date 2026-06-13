@@ -96,6 +96,22 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
   margin-top: auto;
   padding-top: 12px;
   border-top: 1px solid var(--muted2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.app-build-chip {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 10px 12px;
+  border: 1px solid var(--muted2);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.02);
+  line-height: 1.45;
+}
+.app-build-chip strong {
+  color: var(--text);
+  font-weight: 600;
 }
 .add-btn-sidebar {
   width: 100%;
@@ -598,6 +614,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Item
       </button>
+      <div class="app-build-chip" id="sidebar-build-chip">Version loading...</div>
     </div>
   </aside>
 
@@ -839,6 +856,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
           <div class="settings-row">
             <div><div class="settings-row-label">Clear All Data</div><div class="settings-row-desc" style="color:var(--danger)">Irreversible</div></div>
             <button class="settings-select" style="color:var(--danger);border-color:rgba(255,95,122,0.3)" onclick="clearAll()">Clear</button>
+          </div>
+          <div class="settings-row">
+            <div><div class="settings-row-label">Build</div><div class="settings-row-desc" id="settings-build-info">Version loading...</div></div>
           </div>
         </div>
 
@@ -1147,6 +1167,7 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
 var SUPABASE_URL = 'https://hncffbdvniedxfkawjhl.supabase.co';
 var SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_NejWIQfdOe-L4DaJx6MRdA_uyEGXs1b';
 var PROD_APP_URL = 'https://subkit-ten.vercel.app/';
+var APP_VERSION = 'v0.2.0';
 var LOCAL_SUBS_KEY = 'subkit-subs-local';
 var LEGACY_SUBS_KEY = 'subkit-subs';
 var CLOUD_SYNC_FLAG_PREFIX = 'subkit-cloud-sync-';
@@ -1186,6 +1207,13 @@ var BILL_CATEGORIES = TRACKING_CATEGORY_OPTIONS.bill.slice();
 
 var pageTitles = {home:'Dashboard',subs:'Tracked Items',calendar:'Calendar',analytics:'Analytics',reminders:'Reminders',settings:'Settings'};
 var pageSubs = {home:'Overview of your subscriptions and bills',subs:'Manage subscriptions and bill reminders together',calendar:'Charge calendar',analytics:'Spending breakdown & insights',reminders:'Email reminder configuration',settings:'App preferences & configuration'};
+function appEnvironment(){
+  var host = window.location.hostname || '';
+  if(window.location.protocol === 'file:' || host === '127.0.0.1' || host === 'localhost') return 'Local';
+  if(host === 'subkit-ten.vercel.app') return 'Production';
+  if(host.indexOf('vercel.app') !== -1) return 'Preview';
+  return 'Custom';
+}
 
 var EJS = {
   serviceId:  localStorage.getItem('ejs-service')  || '',
@@ -1426,6 +1454,14 @@ function setAuthFeedback(message, type){
   var el = document.getElementById('auth-feedback');
   el.textContent = message;
   el.style.color = type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--green)' : 'var(--muted)';
+}
+function renderBuildInfo(){
+  var env = appEnvironment();
+  var sidebar = document.getElementById('sidebar-build-chip');
+  var settings = document.getElementById('settings-build-info');
+  var label = APP_VERSION + ' • ' + env;
+  if(sidebar) sidebar.innerHTML = '<strong>'+APP_VERSION+'</strong><br>'+env+' build';
+  if(settings) settings.textContent = label;
 }
 function syncEmojiButtons(){
   document.querySelectorAll('.emoji-btn').forEach(function(btn){
@@ -2780,6 +2816,7 @@ document.getElementById('currency-desc-s').textContent = disp+' - '+C[disp].name
 if(EJS.pubKey) try { emailjs.init(EJS.pubKey); } catch (e) {}
 applyTheme();
 applyFont();
+renderBuildInfo();
 updateAddTypeSelection('Entertainment');
 updatePriceModeFields();
 updatePriceCurrency();
