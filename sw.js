@@ -1,4 +1,4 @@
-const CACHE = 'subkit-v2';
+const CACHE = 'subkit-v3';
 const SHELL = ['/', '/index.html', '/icon.svg', '/manifest.json'];
 
 self.addEventListener('install', function(e) {

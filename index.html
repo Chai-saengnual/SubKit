@@ -1167,7 +1167,7 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
 var SUPABASE_URL = 'https://hncffbdvniedxfkawjhl.supabase.co';
 var SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_NejWIQfdOe-L4DaJx6MRdA_uyEGXs1b';
 var PROD_APP_URL = 'https://subkit-ten.vercel.app/';
-var APP_VERSION = 'v0.2.0';
+var APP_VERSION = 'v0.2.1';
 var LOCAL_SUBS_KEY = 'subkit-subs-local';
 var LEGACY_SUBS_KEY = 'subkit-subs';
 var CLOUD_SYNC_FLAG_PREFIX = 'subkit-cloud-sync-';
@@ -2537,6 +2537,14 @@ function saveEmailSettings(){
   renderReminders();
 }
 function ejsReady(){ return EJS.serviceId && EJS.templateId && EJS.pubKey && EJS.email; }
+function reminderPriceText(sub){
+  return fmtO(effectiveAmount(sub), sub.currency||'USD')+'/'+(sub.cycle||'monthly');
+}
+function reminderReferenceText(sub){
+  return sub.priceMode !== 'fixed'
+    ? fmtO(effectiveAmount(sub), sub.currency||'USD')+' • Ref '+fmtO(sub.price, sub.currency||'USD')
+    : fmtO(sub.price, sub.currency||'USD');
+}
 async function persistReminderState(sub, today){
   sub._lastRemind = today;
   if(currentUser){
@@ -2552,10 +2560,8 @@ function sendReminderEmail(sub){
   emailjs.send(EJS.serviceId, EJS.templateId, {
     to_email: EJS.email,
     sub_name: sub.name,
-    sub_price: fmtD(moUSD(sub))+'/mo',
-    sub_orig: sub.priceMode !== 'fixed'
-      ? fmtO(effectiveAmount(sub), sub.currency||'USD')+' • Ref '+fmtO(sub.price, sub.currency||'USD')
-      : fmtO(sub.price, sub.currency||'USD'),
+    sub_price: reminderPriceText(sub),
+    sub_orig: reminderReferenceText(sub),
     renewal_date: sub.nextDate ? new Date(sub.nextDate).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) : '-',
     days_left: days !== null ? days : '-',
     sub_emoji: sub.emoji
@@ -2580,7 +2586,7 @@ function sendTestEmail(){
   emailjs.send(EJS.serviceId, EJS.templateId, {
     to_email: EJS.email,
     sub_name: 'SubKit Test Reminder',
-    sub_price: fmtD(9.99)+'/mo',
+    sub_price: '$9.99 USD/monthly',
     sub_orig: '$9.99 USD',
     renewal_date: new Date(Date.now()+3*86400000).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}),
     days_left: '3',
@@ -2605,7 +2611,9 @@ async function triggerServerReminders(){
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer '+token },
       body: JSON.stringify({ ejs_service: EJS.serviceId, ejs_template: EJS.templateId, ejs_public_key: EJS.pubKey, ejs_email: EJS.email, reminder_days: EJS.days })
     });
-    var data = await res.json();
+    var raw = await res.text();
+    var data = {};
+    try { data = raw ? JSON.parse(raw) : {}; } catch (parseError) { data = { error: raw }; }
     if(!res.ok) throw new Error(data.error || 'Edge function error');
     var sent = data.sent || [];
     if(sent.length){ toast('📧 Sent '+sent.length+' server-side reminder(s)', 'success'); await loadSubscriptions(); }
