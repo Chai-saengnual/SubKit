@@ -72,9 +72,12 @@ Deno.serve(async (req) => {
     return Number.isFinite(base) ? base : 0
   }
 
-  for (const sub of subs ?? []) {
+  // Process a single subscription: send the EmailJS request, then update
+  // last_remind on success. Errors are caught and pushed to `failed` so
+  // that one bad sub does not abort the whole batch under allSettled.
+  const processOne = async (sub: Record<string, unknown>) => {
     // Skip if already reminded today
-    if (sub.last_remind === today) continue
+    if (sub.last_remind === today) return
 
     const daysLeft = Math.ceil(
       (new Date(sub.next_date).getTime() - Date.now()) / 86400000
@@ -124,6 +127,22 @@ Deno.serve(async (req) => {
       failed.push(sub.name)
     }
   }
+
+  // Bounded-concurrency worker pool: at most 5 EmailJS calls in flight at
+  // once. allSettled means a single failure does not reject the others.
+  const CONCURRENCY = 5
+  const queue = (subs ?? []).slice()
+  const workers = Array.from(
+    { length: Math.min(CONCURRENCY, queue.length) },
+    async () => {
+      while (queue.length) {
+        const sub = queue.shift()
+        if (!sub) break
+        await processOne(sub)
+      }
+    }
+  )
+  await Promise.allSettled(workers)
 
   return new Response(JSON.stringify({ sent, failed, total: (subs ?? []).length }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
