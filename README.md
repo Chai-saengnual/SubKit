@@ -54,9 +54,7 @@ One `index.html` (HTML + inline CSS + ~1700 lines of vanilla JS) plus a service 
 
 ## Configuration
 
-The only thing embedded in `index.html` is a Supabase URL and a publishable key — public by design (see [Security model](#security-model)). To unlock the optional features, set up the three services. Full per-service walkthroughs (project creation, where to find each key, what to paste where) are in [`docs/configuration.md`](docs/configuration.md). Short version: Supabase for cloud sync, EmailJS for browser-side email, Telegram bot for browser-side messages.
-
-> Read the [Security model](#security-model) section before you start pasting keys. The Telegram bot token and EmailJS IDs end up in your browser's `localStorage` — that's a deliberate trade-off.
+The only thing embedded in `index.html` is a Supabase URL and a publishable key — public by design (see [Security model](#security-model)). The optional features need three services: Supabase for cloud sync, EmailJS for browser-side email, Telegram bot for browser-side messages. Per-service walkthroughs (project creation, where to find each key, what to paste where) are in [`docs/configuration.md`](docs/configuration.md). Read the [Security model](#security-model) section before you start pasting keys.
 
 ## Development
 
