@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubKit — Your subscriptions, one number you can trust</title>
+<meta name="description" content="SubKit tracks your subscriptions manually — no bank linking — and reminds you before they renew. Track in 5 seconds. Real reminders. Multi-device sync. Free for up to 5 subs.">
+<meta name="theme-color" content="#0a0a0f">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SubKit">
+<meta property="og:title" content="SubKit — Your subscriptions, one number you can trust">
+<meta property="og:description" content="Track in 5 seconds. Real reminders. Multi-device sync. No bank linking.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://subkit-ten.vercel.app/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* Same CSS custom properties as app.html (DESIGN.md v1.0) */
+:root {
+  --bg: #0a0a0f; --surface: #13131a; --surface2: #1c1c26; --surface-2: #1c1c26; --surface3: #22222e; --surface-3: #22222e;
+  --cyan: #4dd8e8; --cyan-dim: rgba(77,216,232,0.15); --cyan-glow: rgba(77,216,232,0.3);
+  --text: #f0f0f5; --muted: #8e8ea8; --muted-2: #3a3a50;
+  --text-secondary: #b4b4c0; --muted-text: #b4b4c0;
+  --danger: #ff5f7a; --warn: #ffa64d; --green: #4ddc9a;
+  --radius: 16px; --radius-sm: 10px; --radius-md: 16px; --radius-lg: 20px; --radius-pill: 32px;
+  --border: rgba(255,255,255,0.06);
+  --border-strong: rgba(255,255,255,0.10);
+  --primary-glow: rgba(77,216,232,0.25);
+  --primary: #4dd8e8;
+  --primary-dim: rgba(77, 216, 232, 0.12);
+  --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+}
+html, body { background: var(--bg); color: var(--text); font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
+body { line-height: 1.5; overflow-x: hidden; }
+a { color: inherit; text-decoration: none; }
+button { font-family: var(--font-body); cursor: pointer; }
+.container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+/* TOPNAV (matches app's topnav style, simplified) */
+.topnav {
+  position: sticky; top: 0; left: 0; right: 0; height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border-bottom: 1px solid var(--border);
+  z-index: 10;
+}
+.topnav-left { display: flex; align-items: center; gap: 32px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -0.01em; }
+.brand-mark {
+  width: 28px; height: 28px;
+  background: var(--primary);
+  color: var(--bg);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(77, 216, 232, 0.4), 0 0 12px var(--primary-glow);
+}
+.nav { display: flex; align-items: center; gap: 2px; }
+.nav-item { padding: 7px 14px; border-radius: var(--radius-pill); font-size: 14px; font-weight: 500; color: var(--text-secondary); cursor: pointer; transition: all 0.15s ease; border: none; background: none; font-family: var(--font-body); }
+.nav-item:hover { color: var(--text); background: var(--surface-2); }
+.topnav-right { display: flex; align-items: center; gap: 8px; }
+.btn { padding: 8px 16px; border-radius: var(--radius-pill); font-family: var(--font-body); font-size: 14px; font-weight: 500; border: 1px solid transparent; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.btn-secondary { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
+.btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
+.btn-primary { background: var(--primary); color: var(--bg); }
+.btn-primary:hover { box-shadow: 0 0 0 3px var(--primary-glow); }
+.btn-lg { padding: 14px 24px; font-size: 15px; font-weight: 600; }
+
+/* HERO */
+.hero { padding: 88px 0 64px; position: relative; overflow: hidden; }
+.hero::before {
+  content: ""; position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+  width: 720px; height: 720px; border-radius: 50%;
+  background: radial-gradient(circle, var(--cyan-glow) 0%, transparent 60%);
+  opacity: 0.4; pointer-events: none; z-index: 0;
+}
+.hero-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 56px; align-items: center; position: relative; z-index: 1; }
+.hero-eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: var(--radius-pill); background: var(--primary-dim); color: var(--primary); font-size: 12px; font-weight: 600; letter-spacing: 0.02em; margin-bottom: 24px; }
+.hero-eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 8px var(--primary-glow); }
+.hero h1 { font-size: 56px; font-weight: 600; line-height: 1.05; letter-spacing: -0.03em; color: var(--text); margin-bottom: 20px; }
+.hero h1 .accent { color: var(--primary); }
+.hero-sub { font-size: 18px; line-height: 1.55; color: var(--text-secondary); max-width: 480px; margin-bottom: 32px; }
+.hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.hero-strip { font-size: 13px; color: var(--muted); display: flex; gap: 18px; flex-wrap: wrap; }
+.hero-strip span::before { content: "✓"; color: var(--primary); margin-right: 6px; font-weight: 700; }
+
+/* PHONE MOCKUP (CSS-drawn dashboard preview) */
+.phone-wrap { display: flex; justify-content: center; }
+.phone {
+  width: 320px; height: 640px;
+  background: var(--bg);
+  border: 10px solid var(--surface-3);
+  border-radius: 44px;
+  padding: 18px 14px;
+  box-shadow: 0 30px 60px rgba(0,0,0,0.5), 0 0 0 1px var(--border-strong), inset 0 0 0 1px var(--border);
+  position: relative;
+}
+.phone::before { content: ""; position: absolute; top: 6px; left: 50%; transform: translateX(-50%); width: 90px; height: 22px; background: var(--bg); border-radius: 0 0 14px 14px; z-index: 2; }
+.phone-screen { background: var(--bg); border-radius: 28px; height: 100%; padding: 36px 16px 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.ps-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px; }
+.ps-head .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.ps-head .pill { font-size: 10px; padding: 3px 8px; border-radius: var(--radius-pill); background: var(--primary-dim); color: var(--primary); font-weight: 600; }
+.ps-total { padding: 16px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-md); }
+.ps-total .lbl { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.ps-total .val { font-size: 28px; font-weight: 600; color: var(--text); letter-spacing: -0.02em; }
+.ps-total .val .cur { color: var(--muted); font-size: 14px; margin-left: 4px; font-weight: 400; }
+.ps-total .meta { font-size: 11px; color: var(--green); margin-top: 6px; }
+.ps-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.ps-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+.ps-icon.netflix { background: #e50914; color: #fff; }
+.ps-icon.spotify { background: #1db954; color: #fff; }
+.ps-icon.figma { background: linear-gradient(135deg, #f24e1e, #a259ff); color: #fff; }
+.ps-info { flex: 1; min-width: 0; }
+.ps-name { font-size: 12px; font-weight: 500; color: var(--text); }
+.ps-due { font-size: 10px; color: var(--muted); }
+.ps-amt { font-size: 12px; font-weight: 600; color: var(--text); font-family: var(--font-mono); }
+
+/* SECTIONS */
+section { padding: 80px 0; }
+.section-head { text-align: center; max-width: 640px; margin: 0 auto 48px; }
+.section-head h2 { font-size: 36px; font-weight: 600; letter-spacing: -0.02em; color: var(--text); margin-bottom: 12px; }
+.section-head p { font-size: 16px; color: var(--text-secondary); }
+
+/* FEATURES GRID */
+.feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.feat { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 28px; }
+.feat .ico { width: 40px; height: 40px; border-radius: 12px; background: var(--primary-dim); color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; margin-bottom: 18px; }
+.feat h3 { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; letter-spacing: -0.01em; }
+.feat p { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+
+/* PRICING */
+.pricing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 760px; margin: 0 auto; }
+.price { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 32px; position: relative; }
+.price.featured { border-color: var(--primary); background: linear-gradient(180deg, rgba(77,216,232,0.04), var(--surface) 60%); }
+.price .badge { position: absolute; top: -12px; right: 24px; background: var(--primary); color: var(--bg); font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: var(--radius-pill); }
+.price h3 { font-size: 20px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.price .sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+.price .amt { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+.price .amt .v { font-size: 40px; font-weight: 600; color: var(--text); letter-spacing: -0.02em; }
+.price .amt .u { font-size: 14px; color: var(--muted); }
+.price .annual { font-size: 12px; color: var(--muted); margin-bottom: 24px; min-height: 18px; }
+.price ul { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+.price li { font-size: 14px; color: var(--text-secondary); display: flex; gap: 10px; align-items: flex-start; }
+.price li::before { content: "✓"; color: var(--primary); font-weight: 700; flex-shrink: 0; }
+.price .btn { width: 100%; justify-content: center; }
+
+/* FAQ */
+.faq { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.faq-item { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden; }
+.faq-q { width: 100%; text-align: left; padding: 18px 22px; background: none; border: none; color: var(--text); font-size: 15px; font-weight: 500; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.faq-q .chev { color: var(--muted); font-size: 18px; transition: transform 0.2s; flex-shrink: 0; }
+.faq-item.open .faq-q .chev { transform: rotate(180deg); color: var(--primary); }
+.faq-a { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; }
+.faq-a-inner { padding: 0 22px 18px; font-size: 14px; color: var(--text-secondary); line-height: 1.65; }
+.faq-item.open .faq-a { max-height: 200px; }
+
+/* CTA STRIP */
+.cta-strip { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 48px; text-align: center; margin: 0 24px 0; }
+.cta-strip h2 { font-size: 32px; font-weight: 600; color: var(--text); margin-bottom: 10px; letter-spacing: -0.02em; }
+.cta-strip p { font-size: 16px; color: var(--text-secondary); margin-bottom: 28px; }
+
+/* FOOTER */
+footer { padding: 40px 0 32px; border-top: 1px solid var(--border); margin-top: 24px; }
+.foot-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.foot-row .legal { font-size: 13px; color: var(--muted); }
+.foot-row .links { display: flex; gap: 20px; font-size: 13px; color: var(--muted); }
+.foot-row .links a:hover { color: var(--primary); }
+
+/* RESPONSIVE */
+@media (max-width: 860px) {
+  .hero { padding: 56px 0 40px; }
+  .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+  .hero h1 { font-size: 40px; }
+  .hero-sub { font-size: 16px; }
+  .feat-grid { grid-template-columns: 1fr; }
+  .pricing-grid { grid-template-columns: 1fr; }
+  .section-head h2 { font-size: 28px; }
+  section { padding: 56px 0; }
+  .topnav { padding: 0 16px; }
+  .nav { display: none; }
+  .cta-strip { padding: 32px 24px; margin: 0 16px; }
+}
+</style>
+</head>
+<body>
+
+<nav class="topnav" aria-label="Primary">
+  <div class="topnav-left">
+    <div class="brand">
+      <div class="brand-mark">⚡</div>
+      SubKit
+    </div>
+    <div class="nav">
+      <a class="nav-item" href="#features">Features</a>
+      <a class="nav-item" href="#pricing">Pricing</a>
+      <a class="nav-item" href="#faq">FAQ</a>
+    </div>
+  </div>
+  <div class="topnav-right">
+    <a class="btn btn-primary" href="/app">Get the app</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container">
+    <div class="hero-grid">
+      <div>
+        <div class="hero-eyebrow"><span class="dot"></span> Manual tracking · No bank linking</div>
+        <h1>Your subscriptions, <span class="accent">one number</span> you can trust.</h1>
+        <p class="hero-sub">Track in 5 seconds. Real reminders. Multi-device sync. No bank linking. SubKit gives you one honest total of what you pay every month — and a nudge before anything renews.</p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary btn-lg" href="/app">Get the app →</a>
+          <a class="btn btn-secondary btn-lg" href="/app">Try the web app</a>
+        </div>
+        <div class="hero-strip">
+          <span>Free for up to 5 subs</span>
+          <span>No credit card</span>
+          <span>Works offline</span>
+        </div>
+      </div>
+      <div class="phone-wrap">
+        <div class="phone" aria-hidden="true">
+          <div class="phone-screen">
+            <div class="ps-head">
+              <div class="label">Monthly total</div>
+              <div class="pill">▲ synced</div>
+            </div>
+            <div class="ps-total">
+              <div class="lbl">This month</div>
+              <div class="val">487.50<span class="cur">USD</span></div>
+              <div class="meta">3 days until next charge</div>
+            </div>
+            <div class="ps-row">
+              <div class="ps-icon netflix">N</div>
+              <div class="ps-info">
+                <div class="ps-name">Netflix Premium</div>
+                <div class="ps-due">Renews Jun 22</div>
+              </div>
+              <div class="ps-amt">$17.99</div>
+            </div>
+            <div class="ps-row">
+              <div class="ps-icon spotify">♫</div>
+              <div class="ps-info">
+                <div class="ps-name">Spotify Family</div>
+                <div class="ps-due">Renews Jul 03</div>
+              </div>
+              <div class="ps-amt">$16.99</div>
+            </div>
+            <div class="ps-row">
+              <div class="ps-icon figma">F</div>
+              <div class="ps-info">
+                <div class="ps-name">Figma Professional</div>
+                <div class="ps-due">Renews Jul 12</div>
+              </div>
+              <div class="ps-amt">$15.00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="container">
+    <div class="section-head">
+      <h2>Track in seconds, not in spreadsheets.</h2>
+      <p>The three things every subscription tracker should do — done well, with the privacy bank-linked apps can't offer.</p>
+    </div>
+    <div class="feat-grid">
+      <div class="feat">
+        <div class="ico">5s</div>
+        <h3>Track in 5 seconds</h3>
+        <p>Quick manual entry. Type a name, an amount, a date. No bank linking required — your data is yours, and adding a new sub takes less time than brewing coffee.</p>
+      </div>
+      <div class="feat">
+        <div class="ico">⏰</div>
+        <h3>Reminders that work</h3>
+        <p>Email and Telegram reminders, sent 3 days before each renewal. You stay in control of what you keep and what you cancel — not surprised by a charge on your statement.</p>
+      </div>
+      <div class="feat">
+        <div class="ico">☁</div>
+        <h3>Sync across devices</h3>
+        <p>Pro tier unlocks real-time cloud sync. Add a sub from your phone, see it on your laptop five seconds later. Supabase-backed, end-to-end yours.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="container">
+    <div class="section-head">
+      <h2>Honest pricing. No dark patterns.</h2>
+      <p>The free tier is genuinely useful. The Pro tier is for power users who want unlimited subs and multi-device sync.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="price">
+        <h3>Free</h3>
+        <div class="sub">For most people, forever.</div>
+        <div class="amt"><span class="v">$0</span><span class="u">/forever</span></div>
+        <div class="annual">No credit card. No expiry.</div>
+        <ul>
+          <li>Up to 5 subscriptions + 5 bills</li>
+          <li>Local-only storage (stays on your device)</li>
+          <li>Email + Telegram reminders</li>
+          <li>Invoice attachments (up to 5)</li>
+          <li>All core views: Dashboard, Items, Calendar, Analytics, Reminders, Settings</li>
+          <li>Dark + light theme, 5 font choices</li>
+        </ul>
+        <a class="btn btn-secondary" href="/app">Start free</a>
+      </div>
+      <div class="price featured">
+        <div class="badge">RECOMMENDED</div>
+        <h3>Pro</h3>
+        <div class="sub">For power users and multi-device setups.</div>
+        <div class="amt"><span class="v">$4.99</span><span class="u">/month</span></div>
+        <div class="annual">or $39/year — save 35%</div>
+        <ul>
+          <li><strong>Unlimited</strong> subscriptions + bills</li>
+          <li>Cloud sync across devices (Supabase, real-time)</li>
+          <li>Full analytics: year-over-year, projected 12-month charges</li>
+          <li>Larger invoice attachments</li>
+          <li>Priority support — 24-hour email response</li>
+          <li>Early access to new features</li>
+        </ul>
+        <a class="btn btn-primary" href="/app">Start Pro trial</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="container">
+    <div class="section-head">
+      <h2>Frequently asked, honestly answered.</h2>
+      <p>The questions we get the most — answered the way we'd want a SaaS to answer them.</p>
+    </div>
+    <div class="faq">
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">Does SubKit connect to my bank? <span class="chev">▾</span></button>
+        <div class="faq-a"><div class="faq-a-inner"><strong>No, by design.</strong> SubKit is a manual tracker — you add your subscriptions by hand. We never see your bank account, your transactions, or your balance. That's the privacy promise and we won't change it.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">Where is my data stored? <span class="chev">▾</span></button>
+        <div class="faq-a"><div class="faq-a-inner"><strong>Your device by default.</strong> On the free tier, your subscriptions live in your browser's local storage and never leave your device. Upgrade to Pro and they sync to our Supabase project, encrypted in transit and at rest. You can export and delete at any time from Settings.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">What happens when I hit the free limit? <span class="chev">▾</span></button>
+        <div class="faq-a"><div class="faq-a-inner">You'll see a clear upgrade prompt. <strong>Your existing data is safe.</strong> You can keep viewing and managing your 5 subscriptions; adding a 6th requires Pro. We don't lock you out or threaten to delete anything.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">What does Pro add? <span class="chev">▾</span></button>
+        <div class="faq-a"><div class="faq-a-inner"><strong>Unlimited subs + multi-device sync + full analytics.</strong> The short version: Pro is for people who run their subscriptions across a phone and a laptop, and want a real annual spending picture. Everything in the free tier stays free forever.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">How do I cancel? <span class="chev">▾</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Settings → Manage subscription → Cancel. <strong>We don't hide it.</strong> Your Pro features stay active until the end of the billing period; your data stays on your device either way. No retention tricks, no email-only-cancellations.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">Is there a mobile app? <span class="chev">▾</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Today: it's a PWA, installable to your home screen on iOS and Android. <strong>Native App Store + Play Store builds are on the v1.0 launch roadmap (week 4+).</strong> The web app is fully offline-capable and feels native once installed.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top: 24px; padding-bottom: 0;">
+  <div class="cta-strip">
+    <h2>Know what you pay. Cancel what you don't.</h2>
+    <p>Set up takes 30 seconds. No credit card. Your first 5 subscriptions are on the house — forever.</p>
+    <a class="btn btn-primary btn-lg" href="/app">Get the app →</a>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="foot-row">
+      <div class="legal">© 2026 Chai Saengnual · Built with care.</div>
+      <div class="links">
+        <a href="#privacy">Privacy</a>
+        <a href="#terms">Terms</a>
+        <a href="#changelog">Changelog</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+// FAQ accordion
+document.querySelectorAll('.faq-q').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var item = btn.parentElement;
+    var open = item.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+});
+// Smooth scroll for in-page nav
+document.querySelectorAll('a[href^="#"]').forEach(function(a){
+  a.addEventListener('click', function(e){
+    var id = a.getAttribute('href');
+    if(id.length > 1) {
+      var el = document.querySelector(id);
+      if(el){ e.preventDefault(); el.scrollIntoView({behavior:'smooth', block:'start'}); }
+    }
+  });
+});
+</script>
+</body>
+</html>
