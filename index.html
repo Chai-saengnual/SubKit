@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="SubKit">
 <script>(function(){var t=localStorage.getItem('subkit-theme')||'dark';var dark=t==='dark'||(t==='system'&&!window.matchMedia('(prefers-color-scheme: light)').matches);document.documentElement.setAttribute('data-theme',dark?'dark':'light');var f=localStorage.getItem('subkit-font');if(f)document.documentElement.style.setProperty('--font-body',"'"+f+"', sans-serif");})()</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Nunito:wght@300;400;500;600;700&family=Sora:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -25,7 +25,29 @@
   --danger: #ff5f7a; --warn: #ffa64d; --green: #4ddc9a;
   --radius: 16px; --radius-sm: 10px;
   --sidebar: 240px;
-  --font-body: 'DM Sans', sans-serif;
+  --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* v1.0 visual tokens (supplement existing) */
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-pill: 32px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.4), 0 4px 8px rgba(0,0,0,0.3);
+  --border: rgba(255,255,255,0.06);
+  --border-strong: rgba(255,255,255,0.10);
+  --primary-glow: rgba(77,216,232,0.25);
+  --muted-text: #b4b4c0;
+  --text-secondary: #b4b4c0;
+  --warn-color: #ffa64d;
+  --danger-color: #ff5f7a;
+  --green-color: #4ddc9a;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+  /* v1.0 mockup class tokens (supplement existing) */
+  --primary: #4dd8e8;
+  --primary-dim: rgba(77, 216, 232, 0.12);
+  --surface-2: #1c1c26;
+  --surface-3: #22222e;
+  --muted-2: #5a5a70;
 }
 [data-theme="light"] {
   --bg: #f4f4f7; --surface: #ffffff; --surface2: #eeeef3; --surface3: #e4e4eb;
@@ -571,13 +593,287 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .screen::-webkit-scrollbar { width: 4px; }
 .screen::-webkit-scrollbar-track { background: transparent; }
 .screen::-webkit-scrollbar-thumb { background: var(--muted2); border-radius: 100px; }
+
+/* v1.0 dark+minimax visual — ported from mockup-v1-dark.html */
+.topnav {
+  position: fixed; top: 0; left: 0; right: 0; height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border-bottom: 1px solid var(--border);
+  z-index: 10;
+}
+.topnav-left { display: flex; align-items: center; gap: 32px; }
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 600; font-size: 17px; color: var(--text);
+  letter-spacing: -0.01em;
+}
+.brand-mark {
+  width: 28px; height: 28px;
+  background: var(--primary);
+  color: var(--bg);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(77, 216, 232, 0.4), 0 0 12px var(--primary-glow);
+}
+.nav { display: flex; align-items: center; gap: 2px; }
+.nav-item {
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 14px; font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.nav-item:hover { color: var(--text); background: var(--surface-2); }
+.nav-item.active {
+  color: var(--primary);
+  background: var(--primary-dim);
+}
+.topnav-right { display: flex; align-items: center; gap: 8px; }
+.btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-body);
+  font-size: 14px; font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-secondary { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
+.btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
+.btn-primary { background: var(--primary); color: var(--bg); }
+.btn-primary:hover { box-shadow: 0 0 0 3px var(--primary-glow); }
+
+.page-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 24px;
+}
+.page-title {
+  font-size: 30px; font-weight: 600; letter-spacing: -0.02em; color: var(--text);
+  display: flex; align-items: center; gap: 12px;
+}
+.page-title .greeting-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary-glow);
+}
+.page-sub { font-size: 14px; color: var(--muted); margin-top: 4px; }
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 22px 22px 20px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+.stat-card.hero {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+  border-color: var(--border-strong);
+}
+.stat-card.hero::after {
+  content: ''; position: absolute;
+  right: -60px; top: -60px;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--primary-dim) 0%, transparent 70%);
+  pointer-events: none;
+}
+.stat-label {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.stat-value {
+  font-size: 34px; font-weight: 600; color: var(--text);
+  margin-top: 10px; letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+.stat-value.lg { font-size: 42px; }
+.stat-value.accent { color: var(--primary); }
+.stat-meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.stat-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  font-size: 11px; font-weight: 500; color: var(--text-secondary);
+  margin-top: 14px;
+}
+.stat-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+.stat-pill.warn .dot { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+.stat-pill.danger .dot { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+.cols { display: grid; grid-template-columns: 1.55fr 1fr; gap: 20px; }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+}
+.panel + .panel { margin-top: 16px; }
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 18px;
+}
+.panel-title { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+.panel-link { font-size: 13px; color: var(--primary); cursor: pointer; }
+.panel-link:hover { text-decoration: underline; }
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.sub-card {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+.sub-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(77, 216, 232, 0.3);
+}
+.sub-card-icon {
+  width: 40px; height: 40px;
+  background: var(--surface-2);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  margin-bottom: 12px;
+}
+.sub-card-name {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 6px;
+}
+.sub-card-cat { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.sub-card-price {
+  font-size: 18px; font-weight: 600; color: var(--text);
+  margin-top: 12px; letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.sub-card-cycle { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.sub-card-badge {
+  position: absolute; top: 14px; right: 14px;
+  color: var(--bg);
+  font-size: 10px; font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.sub-card-badge.danger { background: var(--danger); }
+.sub-card-badge.warn { background: var(--warn); color: var(--bg); }
+.sub-card-badge.ok { background: var(--green); }
+
+.renewal-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.renewal-item:last-child { border-bottom: none; }
+.renewal-icon {
+  width: 36px; height: 36px;
+  background: var(--surface-2);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.renewal-info { flex: 1; min-width: 0; }
+.renewal-name { font-size: 13px; font-weight: 500; color: var(--text); }
+.renewal-when { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.renewal-amount {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-row {
+  display: grid; grid-template-columns: 110px 1fr 60px;
+  align-items: center; gap: 12px;
+  padding: 7px 0;
+}
+.bar-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+.bar-track { height: 6px; background: var(--surface-2); border-radius: var(--radius-pill); overflow: hidden; }
+.bar-fill { height: 100%; background: var(--primary); border-radius: var(--radius-pill); transition: width 0.6s ease; }
+.bar-val {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+
+/* v1.0 layout glue — hide legacy sidebar, push .main below the fixed topnav */
+.sidebar.v1-hidden { display: none; }
+.main { margin-top: 64px; }
+
+/* v1.0 view-mode toggle (grid vs list for tracked items) */
+.view-toggle { display: inline-flex; gap: 4px; background: var(--surface2); border: 1px solid var(--muted2); border-radius: var(--radius-pill); padding: 3px; }
+.view-toggle button { background: transparent; border: none; color: var(--muted); font-family: var(--font-body); font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: var(--radius-pill); cursor: pointer; transition: all 0.15s; }
+.view-toggle button.active { background: var(--cyan-dim); color: var(--cyan); }
+.subs-list-grid { display: none; }
+.subs-list-grid.is-active { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+#subs-grid { display: none; }
+#subs-grid.is-active { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+/* v1.0 paywall modal */
+.paywall-plan { position: relative; background: var(--surface2); border: 1px solid var(--muted2); border-radius: var(--radius-md); padding: 16px; cursor: pointer; transition: all 0.15s; }
+.paywall-plan:hover { border-color: var(--cyan); }
+.paywall-plan.is-selected { border-color: var(--cyan); background: var(--cyan-dim); }
+.paywall-plan-featured { border-color: var(--cyan); }
+.paywall-plan-badge { position: absolute; top: -8px; right: 12px; background: var(--cyan); color: var(--bg); font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px; text-transform: uppercase; letter-spacing: 0.04em; }
+.paywall-plan-name { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+.paywall-plan-price { font-size: 24px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+.paywall-plan-price small { font-size: 12px; color: var(--muted); font-weight: 500; margin-left: 2px; }
+.paywall-plan-desc { font-size: 11px; color: var(--muted); margin-top: 4px; }
 </style>
 </head>
 <body>
 <div class="shell">
 
-  <!-- SIDEBAR (desktop) -->
-  <aside class="sidebar" id="sidebar">
+  <!-- TOP NAV (v1.0) — visual only this task, sidebar stays for switchTab logic -->
+  <nav class="topnav" id="topnav" aria-label="Primary">
+    <div class="topnav-left">
+      <div class="brand">
+        <div class="brand-mark">⚡</div>
+        SubKit
+      </div>
+      <div class="nav">
+        <div class="nav-item active">Dashboard</div>
+        <div class="nav-item">Items</div>
+        <div class="nav-item">Calendar</div>
+        <div class="nav-item">Analytics</div>
+        <div class="nav-item">Reminders</div>
+        <div class="nav-item">Settings</div>
+      </div>
+    </div>
+    <div class="topnav-right">
+      <button class="btn btn-secondary" onclick="openExportModal()">Export</button>
+      <button class="btn btn-primary" onclick="openAddModal()">+ Add Item</button>
+    </div>
+  </nav>
+
+  <!-- SIDEBAR (desktop) — hidden in v1.0, kept for v1.1 fallback -->
+  <aside class="sidebar v1-hidden" id="sidebar">
 <div class="sidebar-logo"><span>⚡</span> SubKit</div>
 
     <button class="nav-item active" onclick="switchTab('home',this)" data-tab="home">
@@ -701,6 +997,10 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
           <option value="name-az">Sort: Name A-Z</option>
           <option value="recent-added">Sort: Recently added</option>
         </select>
+        <div class="view-toggle" id="subs-view-toggle" role="group" aria-label="View mode">
+          <button type="button" data-mode="list" onclick="setSubsViewMode('list')">List</button>
+          <button type="button" data-mode="grid" onclick="setSubsViewMode('grid')">Grid</button>
+        </div>
       </div>
       <div class="table-header">
         <div></div><div>Name</div><div>Price / mo</div><div>Next Due</div><div>Progress</div><div></div>
@@ -708,6 +1008,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
       <div class="sub-list" id="subs-list">
 <div class="empty-state"><div class="empty-icon">📭</div><h3>No items yet</h3></div>
       </div>
+      <div class="card-grid" id="subs-grid"></div>
     </div>
 
     <!-- CALENDAR -->
@@ -795,11 +1096,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
           </div>
           <div class="settings-row-label" style="margin-bottom:8px">Font</div>
           <div class="font-select-grid">
-            <button class="font-btn" data-font="DM Sans" onclick="setFont('DM Sans')">DM Sans<span>Default</span></button>
-            <button class="font-btn" data-font="Inter" onclick="setFont('Inter')">Inter<span>Clean</span></button>
-            <button class="font-btn" data-font="Nunito" onclick="setFont('Nunito')">Nunito<span>Friendly</span></button>
-            <button class="font-btn" data-font="Sora" onclick="setFont('Sora')">Sora<span>Modern</span></button>
-            <button class="font-btn" data-font="Space Grotesk" onclick="setFont('Space Grotesk')">Space Grotesk<span>Technical</span></button>
+            <div class="font-readonly" style="background:var(--surface2);border:1px solid var(--muted2);border-radius:var(--radius-sm);padding:12px;color:var(--text);font-size:14px">Body font: <strong>Outfit</strong> (default)</div>
           </div>
         </div>
 
@@ -1154,6 +1451,38 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
   </div>
 </div>
 
+<!-- PAYWALL MODAL (v1.0 — UI only, trigger logic + Stripe land in parallel tracks) -->
+<div class="modal-overlay" id="paywall-modal" onclick="closeModal(event,'paywall-modal')">
+  <div class="modal-box" style="max-width:560px">
+    <div class="modal-title">Unlock unlimited tracking <button class="modal-close" onclick="document.getElementById('paywall-modal').classList.remove('open')">✕</button></div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5">You've reached the 5-subscription free limit. Upgrade to Pro for unlimited items, multi-device sync, and full analytics.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div class="paywall-plan" data-plan="monthly" onclick="selPaywallPlan(this)">
+        <div class="paywall-plan-name">Monthly</div>
+        <div class="paywall-plan-price">$4.99<small>/mo</small></div>
+        <div class="paywall-plan-desc">Cancel anytime</div>
+      </div>
+      <div class="paywall-plan paywall-plan-featured" data-plan="yearly" onclick="selPaywallPlan(this)">
+        <div class="paywall-plan-badge">Save 35%</div>
+        <div class="paywall-plan-name">Yearly</div>
+        <div class="paywall-plan-price">$39<small>/yr</small></div>
+        <div class="paywall-plan-desc">$3.25/mo equivalent</div>
+      </div>
+      <div class="paywall-plan" data-plan="pro" style="grid-column:1/-1;opacity:.7;cursor:default">
+        <div class="paywall-plan-name">Pro <span style="font-size:11px;color:var(--cyan);margin-left:6px;text-transform:uppercase;letter-spacing:.04em">Current plan</span></div>
+        <div class="paywall-plan-price" style="font-size:14px;color:var(--muted)">You're on Pro — unlimited items, multi-device sync, full analytics.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <button class="btn-secondary" style="flex:1" onclick="closePaywall()">Continue with Free</button>
+      <button class="btn-primary" style="flex:1" onclick="upgradeToPro()">Upgrade to Pro</button>
+    </div>
+    <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">Secure checkout via Stripe. Cancel anytime from Settings.</p>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 <div class="loading-shell" id="loading-shell">
@@ -1233,7 +1562,7 @@ var TG = {
 
 /* ── THEME & FONT ──────────────────────────────────────────────── */
 var appTheme = localStorage.getItem('subkit-theme') || 'dark';   // 'dark'|'light'|'system'
-var appFont  = localStorage.getItem('subkit-font')  || 'DM Sans';
+var appFont  = localStorage.getItem('subkit-font')  || 'Outfit';
 
 var _sysMQ = window.matchMedia('(prefers-color-scheme: light)');
 
@@ -1663,6 +1992,7 @@ async function loadSubscriptions(){
   }
   await autoAdvanceOverdue();
   renderAll();
+  applySubsViewMode();
   renderCalendar();
   renderImportBanner();
 }
@@ -1678,6 +2008,7 @@ function switchTab(tab, btn){
   if(tab==='calendar') renderCalendar();
   if(tab==='analytics') renderAnalytics();
   if(tab==='reminders') renderReminders();
+  if(tab==='subs') applySubsViewMode();
 }
 
 function renderAll(){
@@ -1803,7 +2134,54 @@ function renderSubListEl(elId, list){
       '<div class="sub-row-actions"><span style="color:var(--muted);font-size:18px">></span></div></div>';
   }).join('');
 }
-function renderSubsList(){ renderSubListEl('subs-list', filteredSubsList()); }
+function renderSubsList(){ renderSubListEl('subs-list', filteredSubsList()); renderSubsGrid(); }
+
+/* v1.0 view-mode toggle (grid vs list) */
+var subsViewMode = localStorage.getItem('subkit-view-mode') || 'grid';
+function setSubsViewMode(mode){
+  if(mode !== 'list' && mode !== 'grid') return;
+  subsViewMode = mode;
+  localStorage.setItem('subkit-view-mode', mode);
+  applySubsViewMode();
+}
+function applySubsViewMode(){
+  var listEl = document.getElementById('subs-list');
+  var gridEl = document.getElementById('subs-grid');
+  var tableEl = document.querySelector('#screen-subs .table-header');
+  if(!listEl || !gridEl) return;
+  var grid = subsViewMode === 'grid';
+  listEl.style.display = grid ? 'none' : '';
+  gridEl.classList.toggle('is-active', grid);
+  if(tableEl) tableEl.style.display = grid ? 'none' : '';
+  var btns = document.querySelectorAll('#subs-view-toggle button');
+  btns.forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-mode') === subsViewMode); });
+}
+function renderSubsGrid(){
+  var el = document.getElementById('subs-grid');
+  if(!el) return;
+  var list = filteredSubsList();
+  if(!list.length){
+    el.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📭</div><h3>No items yet</h3></div>';
+    return;
+  }
+  el.innerHTML = list.map(function(sub){
+    var days = dL(sub);
+    var sc = sub.currency || 'USD';
+    var badge = '';
+    if(days !== null){
+      var fillClass = days <= 3 ? 'danger' : days <= 7 ? 'warn' : 'ok';
+      badge = '<div class="sub-card-badge '+fillClass+'">'+days+' days</div>';
+    }
+    return '<div class="sub-card" onclick="openDetail(\''+esc(sub.id)+'\')">'+
+      '<div class="sub-card-icon">'+esc(sub.emoji)+'</div>'+
+      '<div class="sub-card-name">'+esc(sub.name)+'</div>'+
+      '<div class="sub-card-cat">'+esc(sub.category||'')+'</div>'+
+      '<div class="sub-card-price">'+fmtD(moUSD(sub))+'</div>'+
+      '<div class="sub-card-cycle">per month</div>'+
+      badge+
+    '</div>';
+  }).join('');
+}
 
 function renderCalendarDueList(list, selectedDate, monthDate){
   var el=document.getElementById('cal-sub-list');
@@ -2697,6 +3075,25 @@ function closeModal(e,id){
   if(e.target!==e.currentTarget) return;
   document.getElementById(id).classList.remove('open');
   if(id==='add-modal') resetAddForm();
+}
+
+/* v1.0 paywall modal — UI only; plan + Stripe logic land in parallel tracks */
+function openPaywall(){
+  document.getElementById('paywall-modal').classList.add('open');
+}
+function closePaywall(){
+  document.getElementById('paywall-modal').classList.remove('open');
+}
+function selPaywallPlan(el){
+  var plans = document.querySelectorAll('.paywall-plan[data-plan="monthly"], .paywall-plan[data-plan="yearly"]');
+  plans.forEach(function(p){ p.classList.remove('is-selected'); });
+  el.classList.add('is-selected');
+}
+function upgradeToPro(){
+  /* Trigger logic + Stripe Checkout land in the parallel `stripe-edge-functions` and
+     `users-table-and-paywall-trigger` tracks. For now, surface a toast so the click is
+     observable in the UI. */
+  toast('Pro upgrade coming soon — Stripe checkout wires up next.', 'info');
 }
 async function clearAll(){
   if(!confirm('Clear all subscriptions? Cannot be undone.')) return;
