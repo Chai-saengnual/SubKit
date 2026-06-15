@@ -1145,6 +1145,23 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
           <p style="font-size:11px;color:var(--muted);margin-top:12px" id="auth-feedback">Your existing local items will stay on this device until you sign in.</p>
         </div>
 
+        <div class="settings-section" id="settings-plan-section">
+          <div class="settings-section-title">💎 Plan</div>
+          <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:16px;margin-bottom:14px">
+            <div style="font-size:13px;font-weight:600;margin-bottom:6px" id="plan-current-label">Current plan: Free</div>
+            <div style="font-size:12px;color:var(--muted);line-height:1.6" id="plan-current-copy">Free includes up to 5 tracked items, on-device storage, and CSV export. Upgrade for unlimited items, multi-device sync, and full analytics.</div>
+          </div>
+          <div id="plan-free-actions" style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn-save" onclick="openPaywall()">Upgrade to Pro</button>
+          </div>
+          <div id="plan-pro-actions" style="display:none">
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+              <button class="btn-save" onclick="openCustomerPortal()">Manage subscription</button>
+            </div>
+            <p style="font-size:11px;color:var(--muted);line-height:1.5">Cancel anytime from the customer portal. Pro includes unlimited subscriptions, multi-device sync, and full analytics.</p>
+          </div>
+        </div>
+
         <div class="settings-section">
           <div class="settings-section-title">Data</div>
           <div class="settings-row">
@@ -1477,7 +1494,7 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
 
     <div style="display:flex;gap:10px">
       <button class="btn-secondary" style="flex:1" onclick="closePaywall()">Continue with Free</button>
-      <button class="btn-primary" style="flex:1" onclick="upgradeToPro()">Upgrade to Pro</button>
+      <button class="btn-primary" style="flex:1" id="paywall-upgrade-btn" onclick="upgradeToPro()">Upgrade to Pro</button>
     </div>
     <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">Secure checkout via Stripe. Cancel anytime from Settings.</p>
   </div>
@@ -1496,6 +1513,7 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
 <script>
 var SUPABASE_URL = 'https://hncffbdvniedxfkawjhl.supabase.co';
 var SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_NejWIQfdOe-L4DaJx6MRdA_uyEGXs1b';
+var SUPABASE_FUNCTIONS_URL = SUPABASE_URL + '/functions/v1';
 var PROD_APP_URL = 'https://subkit-ten.vercel.app/';
 var APP_VERSION = 'v0.2.0';
 var LOCAL_SUBS_KEY = 'subkit-subs-local';
@@ -1508,6 +1526,7 @@ var supabaseClient = (window.supabase && window.supabase.createClient)
 
 var subs = [];
 var currentUser = null;
+var currentPlanCache = null;
 var isAppLoading = false;
 var subsSearch = '';
 var subsTypeFilter = 'all';
@@ -3079,6 +3098,9 @@ function closeModal(e,id){
 
 /* v1.0 paywall modal — UI only; plan + Stripe logic land in parallel tracks */
 function openPaywall(){
+  // Default-select the yearly card (featured) so the click does what most users want.
+  var yearly = document.querySelector('.paywall-plan[data-plan="yearly"]');
+  if(yearly) selPaywallPlan(yearly);
   document.getElementById('paywall-modal').classList.add('open');
 }
 function closePaywall(){
@@ -3089,11 +3111,158 @@ function selPaywallPlan(el){
   plans.forEach(function(p){ p.classList.remove('is-selected'); });
   el.classList.add('is-selected');
 }
-function upgradeToPro(){
-  /* Trigger logic + Stripe Checkout land in the parallel `stripe-edge-functions` and
-     `users-table-and-paywall-trigger` tracks. For now, surface a toast so the click is
-     observable in the UI. */
-  toast('Pro upgrade coming soon — Stripe checkout wires up next.', 'info');
+function getSelectedPaywallPlan(){
+  var sel = document.querySelector('.paywall-plan.is-selected[data-plan]');
+  return sel ? sel.getAttribute('data-plan') : 'yearly';
+}
+async function upgradeToPro(){
+  if(!currentUser){
+    toast('Sign in first to upgrade to Pro', 'info');
+    closePaywall();
+    openAuth();
+    return;
+  }
+  var plan = getSelectedPaywallPlan();
+  var btn = document.getElementById('paywall-upgrade-btn');
+  setButtonBusy(btn ? btn.id : 'paywall-upgrade-btn', true, 'Opening checkout…', 'Upgrade to Pro');
+  try {
+    var sessionResult = await supabaseClient.auth.getSession();
+    var accessToken = sessionResult.data.session ? sessionResult.data.session.access_token : null;
+    if(!accessToken) throw new Error('No active session');
+    var res = await fetch(SUPABASE_FUNCTIONS_URL + '/create-checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + accessToken,
+      },
+      body: JSON.stringify({ plan: plan }),
+    });
+    if(!res.ok){
+      var errText = await res.text();
+      throw new Error('Checkout failed (' + res.status + '): ' + errText);
+    }
+    var data = await res.json();
+    if(!data.url) throw new Error('No checkout URL returned');
+    window.location.href = data.url;
+  } catch (e) {
+    toast('Could not start checkout: ' + (e.message || e), 'error');
+    setButtonBusy(btn ? btn.id : 'paywall-upgrade-btn', false, 'Opening checkout…', 'Upgrade to Pro');
+  }
+}
+async function openCustomerPortal(){
+  if(!currentUser){
+    toast('Sign in to manage your subscription', 'info');
+    return;
+  }
+  try {
+    var sessionResult = await supabaseClient.auth.getSession();
+    var accessToken = sessionResult.data.session ? sessionResult.data.session.access_token : null;
+    if(!accessToken) throw new Error('No active session');
+    var res = await fetch(SUPABASE_FUNCTIONS_URL + '/create-checkout?action=portal', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + accessToken,
+      },
+    });
+    if(!res.ok){
+      // Fall back to Stripe's hosted account portal lookup if the edge function
+      // doesn't expose a portal action yet — keeps the click non-broken while
+      // the portal endpoint is still being designed.
+      var fallback = await fetch(SUPABASE_FUNCTIONS_URL + '/customer-portal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + accessToken,
+        },
+        body: JSON.stringify({ return_url: PROD_APP_URL + 'app?portal=return' }),
+      });
+      if(!fallback.ok) throw new Error('Portal not available (HTTP ' + fallback.status + ')');
+      var fb = await fallback.json();
+      if(!fb.url) throw new Error('No portal URL');
+      window.location.href = fb.url;
+      return;
+    }
+    var data = await res.json();
+    window.location.href = data.url;
+  } catch (e) {
+    toast('Customer portal not available yet — contact support@subkit.app', 'error');
+  }
+}
+async function getCurrentPlan(){
+  if(!currentUser || !supabaseClient) return { plan: 'free', plan_expires_at: null };
+  var cached = currentPlanCache;
+  if(cached && cached.userId === currentUser.id && (Date.now() - cached.at) < 30000){
+    return cached.state;
+  }
+  try {
+    var res = await supabaseClient.from('users').select('plan, plan_expires_at').eq('id', currentUser.id).single();
+    if(res.error) throw res.error;
+    var state = { plan: (res.data && res.data.plan) || 'free', plan_expires_at: (res.data && res.data.plan_expires_at) || null };
+    currentPlanCache = { userId: currentUser.id, at: Date.now(), state: state };
+    return state;
+  } catch (e) {
+    return { plan: 'free', plan_expires_at: null };
+  }
+}
+async function renderPlanSection(){
+  var label = document.getElementById('plan-current-label');
+  var copy  = document.getElementById('plan-current-copy');
+  var freeActions = document.getElementById('plan-free-actions');
+  var proActions  = document.getElementById('plan-pro-actions');
+  if(!label || !copy || !freeActions || !proActions) return;
+  if(!currentUser){
+    label.textContent = 'Current plan: Free (local only)';
+    copy.textContent = 'Sign in to sync across devices and unlock Pro features.';
+    freeActions.style.display = 'flex';
+    proActions.style.display  = 'none';
+    return;
+  }
+  var state = await getCurrentPlan();
+  var isPro = state.plan === 'pro' && (!state.plan_expires_at || new Date(state.plan_expires_at) > new Date());
+  if(isPro){
+    var exp = state.plan_expires_at ? new Date(state.plan_expires_at).toLocaleDateString() : null;
+    label.textContent = 'Current plan: Pro' + (exp ? ' · renews ' + exp : '');
+    copy.textContent = 'Unlimited subscriptions, multi-device sync, and full analytics are active on your account.';
+    freeActions.style.display = 'none';
+    proActions.style.display  = 'block';
+  } else {
+    label.textContent = 'Current plan: Free';
+    copy.textContent = 'Free includes up to 5 tracked items, on-device storage, and CSV export. Upgrade for unlimited items, multi-device sync, and full analytics.';
+    freeActions.style.display = 'flex';
+    proActions.style.display  = 'none';
+  }
+}
+async function handleCheckoutReturn(){
+  // Read ?upgrade=success|cancel and ?portal=return from the URL after Stripe
+  // bounces the user back. Strip the param after handling so a page refresh
+  // doesn't repeat the toast.
+  var params = new URLSearchParams(window.location.search);
+  var upgrade = params.get('upgrade');
+  var portal  = params.get('portal');
+  if(upgrade === 'success'){
+    toast('Welcome to Pro — syncing your plan now…', 'success');
+    // The webhook may not have landed yet (Stripe → Supabase is ~1-2s). Poll
+    // the users row a few times before giving up, so the UI flips to Pro
+    // without a manual refresh.
+    currentPlanCache = null;
+    for(var i = 0; i < 6; i++){
+      await new Promise(function(r){ setTimeout(r, 1500); });
+      var state = await getCurrentPlan();
+      if(state.plan === 'pro') break;
+    }
+    await renderPlanSection();
+  } else if(upgrade === 'cancel'){
+    toast('Checkout cancelled — no charge made', 'info');
+  } else if(portal === 'return'){
+    toast('Subscription updated', 'success');
+    currentPlanCache = null;
+    await renderPlanSection();
+  }
+  if(upgrade || portal){
+    var newUrl = window.location.pathname + (window.location.hash || '');
+    window.history.replaceState({}, '', newUrl);
+  }
 }
 async function clearAll(){
   if(!confirm('Clear all subscriptions? Cannot be undone.')) return;
@@ -3236,13 +3405,16 @@ async function initAuth(){
   setLoadingState(false);
   supabaseClient.auth.onAuthStateChange(function(_event, session){
     currentUser = session ? session.user : null;
+    currentPlanCache = null;
     setLoadingState(true, currentUser ? 'Syncing your account' : 'Returning to local mode', currentUser ? 'Loading your cloud subscriptions.' : 'Switching back to subscriptions saved on this device.');
     renderAuthState();
+    renderPlanSection();
     Promise.resolve()
       .then(function(){ return loadSubscriptions(); })
       .catch(function(){ toast('Could not refresh subscriptions', 'error'); })
       .finally(function(){ setLoadingState(false); });
   });
+  renderPlanSection();
 }
 
 if(EJS.serviceId) document.getElementById('ejs-service').value = EJS.serviceId;
@@ -3276,6 +3448,7 @@ fetchRates();
 renderAll();
 renderCalendar();
 initAuth().then(function(){
+  handleCheckoutReturn();
   setTimeout(checkAndSendReminders, 2000);
   setInterval(checkAndSendReminders, 4 * 60 * 60 * 1000);
 }).catch(function(){
