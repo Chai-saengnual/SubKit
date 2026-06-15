@@ -34,37 +34,22 @@ In the app's **Settings** screen, paste the keys you have. The ones you skip sta
 
 ## Architecture
 
-One `index.html` (HTML + inline CSS + ~1700 lines of vanilla JS) plus a service worker, PWA manifest, Supabase migrations, and one Edge Function. State lives in memory, mirrored to `localStorage`; Supabase becomes the source of truth when signed in. EmailJS and Telegram calls go out from the browser; the optional Edge Function sends the same reminder emails server-side using the caller's JWT (RLS still applies).
+One `index.html` (HTML + inline CSS + ~1700 lines of vanilla JS) plus a service worker, PWA manifest, Supabase migrations, and one Edge Function. State in memory, mirrored to `localStorage`; Supabase becomes the source of truth when signed in. Reminders go out from the browser to EmailJS and Telegram; the optional Edge Function sends the same reminder emails server-side using the caller's JWT (RLS still applies).
 
 ```
-            ┌──────────────┐
-            │   Browser    │
-            │  (index.html)│
-            └──┬─────┬─────┘
-               │     │     │
-               ▼     ▼     ▼
-        Supabase   EmailJS   Telegram
-        Postgres   REST      Bot API
-            ▲
-            │  (HTTPS, bearer token)
-            │
-        Supabase Edge Function
-        send-reminders ──▶ EmailJS REST
+Browser → Supabase Postgres+Storage  (sync, invoices)
+Browser → EmailJS                    (browser-side reminders)
+Browser → Telegram Bot API           (browser-side messages)
+Edge Function → EmailJS              (server-side reminders, with RLS)
 ```
 
 ## Configuration
 
-The only thing embedded in `index.html` is a Supabase URL and a publishable key — public by design (see [Security model](#security-model)). The optional features need three services: Supabase for cloud sync, EmailJS for browser-side email, Telegram bot for browser-side messages. Per-service walkthroughs (project creation, where to find each key, what to paste where) are in [`docs/configuration.md`](docs/configuration.md). Read the [Security model](#security-model) section before you start pasting keys.
+The only thing embedded in `index.html` is a Supabase URL and a publishable key — public by design (see [Security model](#security-model)). Optional features need three services: Supabase for cloud sync, EmailJS for browser-side email, Telegram bot for browser-side messages. Per-service walkthroughs are in [`docs/configuration.md`](docs/configuration.md). Read [Security model](#security-model) before you start pasting keys.
 
 ## Development
 
-No build step. Open `index.html`, edit, refresh. Use `python3 -m http.server 8000` or `vercel dev` for a static server.
-
-**Migrations.** New files in `supabase/migrations/` with a `YYYYMMDDhhmmss_description.sql` prefix. Pair `enable row level security` with explicit `GRANT`s to the `authenticated` role (see `20260612130235_grant_subscription_access.sql` for the pattern). Run with `supabase db push`.
-
-**Edge Function.** Edit `supabase/functions/send-reminders/index.ts`, then `supabase functions deploy send-reminders`. Logs in **Edge Functions → Logs** in the Supabase dashboard.
-
-**Service worker cache.** When you change the app shell, bump the cache name at the top of `sw.js` (e.g. `subkit-v2` → `subkit-v3`).
+No build step. Open `index.html`, edit, refresh. For migrations, name files `supabase/migrations/YYYYMMDDhhmmss_description.sql`; pair `enable row level security` with explicit `GRANT`s to the `authenticated` role (see `20260612130235_grant_subscription_access.sql`); apply with `supabase db push`. Edge Function: edit `supabase/functions/send-reminders/index.ts`, then `supabase functions deploy send-reminders`. Service worker: bump the cache name at the top of `sw.js` (e.g. `subkit-v3` → `subkit-v4`) when you change the app shell.
 
 ## Security model
 
