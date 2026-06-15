@@ -3097,6 +3097,16 @@ function closeModal(e,id){
 }
 
 /* v1.0 paywall modal — UI only; plan + Stripe logic land in parallel tracks */
+function openAuth(){
+  // Auth lives inside the Settings tab (Cloud Sync section). Open it
+  // and focus the email field so a signed-out user clicking "Upgrade
+  // to Pro" lands on the form instead of a dead-end.
+  switchTab('settings', document.querySelector('[data-tab=settings]'));
+  setTimeout(function(){
+    var el = document.getElementById('auth-email');
+    if(el) el.focus();
+  }, 50);
+}
 function openPaywall(){
   // Default-select the yearly card (featured) so the click does what most users want.
   var yearly = document.querySelector('.paywall-plan[data-plan="yearly"]');
