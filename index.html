@@ -6,6 +6,7 @@
 <title>SubKit - Subscription Tracker</title>
 <meta name="description" content="SubKit is a sleek subscription tracker for monitoring recurring costs, renewals, and reminder workflows in one place.">
 <meta name="theme-color" content="#0a0a0f">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline' 'unsafe-eval'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://hncffbdvniedxfkawjhl.supabase.co https://*.supabase.co wss://*.supabase.co https://api.emailjs.com https://api.telegram.org https://open.er-api.com; form-action 'self'; base-uri 'self';">
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -1172,7 +1173,9 @@ var LOCAL_SUBS_KEY = 'subkit-subs-local';
 var LEGACY_SUBS_KEY = 'subkit-subs';
 var CLOUD_SYNC_FLAG_PREFIX = 'subkit-cloud-sync-';
 var CLOUD_IMPORT_DISMISSED_PREFIX = 'subkit-cloud-import-dismissed-';
-var supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+var supabaseClient = (window.supabase && window.supabase.createClient)
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+  : null;
 
 var subs = [];
 var currentUser = null;
@@ -1277,6 +1280,12 @@ function esc(value){
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+function tgEsc(value){
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 function getR(code){ return (live&&live[code]) ? live[code] : (C[code] ? C[code].r : 1); }
 function toUSD(amount, code){ return amount / getR(code || 'USD'); }
@@ -1434,7 +1443,11 @@ function fetchRates(){
   var cached=localStorage.getItem('subkit-rates');
   var ts=parseInt(localStorage.getItem('subkit-rates-ts') || '0', 10);
   if(cached && Date.now()-ts < 3600000){
-    try { live = JSON.parse(cached); renderAll(); } catch (e) {}
+    try { live = JSON.parse(cached); localStorage.setItem('subkit-rates-status','cached'); renderAll(); } catch (e) {}
+    return;
+  }
+  if(cached && Date.now()-ts < 86400000){
+    try { live = JSON.parse(cached); localStorage.setItem('subkit-rates-status','stale'); renderAll(); } catch (e) {}
     return;
   }
   fetch('https://open.er-api.com/v6/latest/USD')
@@ -1444,10 +1457,35 @@ function fetchRates(){
         live=d.rates;
         localStorage.setItem('subkit-rates', JSON.stringify(d.rates));
         localStorage.setItem('subkit-rates-ts', String(Date.now()));
+        localStorage.setItem('subkit-rates-status','fresh');
         renderAll();
       }
     })
-    .catch(function(){});
+    .catch(function(){
+      localStorage.setItem('subkit-rates-status','failed');
+      renderAll();
+    });
+}
+function renderRateStatus(){
+  var pill = document.getElementById('rate-pill');
+  if(!pill) return;
+  var rate=getR(disp);
+  var rateText=disp==='JPY' ? Math.round(rate) : rate.toFixed(2);
+  var status = localStorage.getItem('subkit-rates-status') || 'fresh';
+  var dot = '';
+  var title = '';
+  if(status === 'cached'){
+    dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:middle"></span>';
+    title = 'Rates from cache (within 1 hour)';
+  } else if(status === 'stale'){
+    dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--warn);margin-right:6px;vertical-align:middle"></span>';
+    title = 'Rates may be outdated';
+  } else if(status === 'failed'){
+    dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--danger);margin-right:6px;vertical-align:middle"></span>';
+    title = 'Couldn\'t fetch latest rates';
+  }
+  pill.innerHTML = dot + '💱 ' + disp + ' (1 USD ≈ ' + rateText + ')';
+  if(title) pill.title = title; else pill.removeAttribute('title');
 }
 
 function setAuthFeedback(message, type){
@@ -1718,7 +1756,7 @@ function renderHome(){
   var cpill = document.getElementById('coffee-pill');
   cpill.textContent = '= ' + coffees(total) + ' Coffee ☕';
   cpill.style.display = coffeeMode ? '' : 'none';
-  document.getElementById('rate-pill').textContent = '💱 ' + disp + ' (1 USD ≈ ' + rateText + ')';
+  renderRateStatus();
 
   var renewalGrid = document.getElementById('renewal-grid');
   var upcoming = subs.filter(function(s){
@@ -2199,14 +2237,14 @@ function tgMsg(sub){
     ? new Date(sub.nextDate).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})
     : '—';
   return '<b>⚡ SubKit Reminder</b>\n\n'+
-    sub.emoji+' <b>'+sub.name+'</b>\n'+
-    '⏰ Renews in <b>'+( days !== null ? days : '?' )+'</b> day(s)\n'+
+    tgEsc(sub.emoji)+' <b>'+tgEsc(sub.name)+'</b>\n'+
+    '⏰ Renews in <b>'+( days !== null ? tgEsc(days) : '?' )+'</b> day(s)\n'+
     '📅 '+dateStr+'\n'+
     '💰 '+fmtD(moUSD(sub))+'/mo'+(sub.currency!==disp || sub.priceMode !== 'fixed' ? ' ('+fmtO(effectiveAmount(sub),sub.currency||'USD')+')' : '')+
-    (sub.priceMode !== 'fixed' ? '\n🧮 '+priceModeLabel(sub.priceMode) : '')+
+    (sub.priceMode !== 'fixed' ? '\n🧮 '+tgEsc(priceModeLabel(sub.priceMode)) : '')+
     (sub.priceMode !== 'fixed' ? '\n📌 Ref: '+fmtO(sub.price,sub.currency||'USD') : '')+
-    (sub.account ? '\n👤 '+sub.account : '')+
-    (sub.priceNote ? '\n📝 '+sub.priceNote : '')+
+    (sub.account ? '\n👤 '+tgEsc(sub.account) : '')+
+    (sub.priceNote ? '\n📝 '+tgEsc(sub.priceNote) : '')+
     '\n\n<i>Sent from SubKit</i>';
 }
 
@@ -2787,6 +2825,11 @@ async function signOut(){
   setAuthFeedback('Signed out. Local subscriptions are available again on this device.', 'success');
 }
 async function initAuth(){
+  if(!supabaseClient){
+    toast('Supabase failed to load. Check your network and refresh.', 'error');
+    setLoadingState(false);
+    return;
+  }
   setLoadingState(true, 'Loading SubKit', 'Checking your session and bringing in the latest subscription data.');
   renderAuthState();
   var sessionResult = await supabaseClient.auth.getSession();
