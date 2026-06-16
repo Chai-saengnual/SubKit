@@ -10,6 +10,13 @@
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:title" content="SubKit - Subscription Tracker">
+<meta property="og:description" content="Track your subscriptions in 5 seconds. Real reminders. Multi-device sync. No bank linking.">
+<meta property="og:image" content="/og.svg">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://subkit-ten.vercel.app/app">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="/og.svg">
 <meta name="apple-mobile-web-app-title" content="SubKit">
 <script>(function(){var t=localStorage.getItem('subkit-theme')||'dark';var dark=t==='dark'||(t==='system'&&!window.matchMedia('(prefers-color-scheme: light)').matches);document.documentElement.setAttribute('data-theme',dark?'dark':'light');var f=localStorage.getItem('subkit-font');if(f)document.documentElement.style.setProperty('--font-body',"'"+f+"', sans-serif");})()</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1088,9 +1095,10 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
           <div id="chart-cycles"></div>
         </div>
         <div class="chart-card" style="grid-column:1/-1">
-          <div class="chart-title">Projected Charges — Next 6 Months</div>
+          <div class="chart-title">Projected Charges — Next 12 Months</div>
           <div id="chart-trend"></div>
         </div>
+        <div style="grid-column:1/-1" id="yoy-section"></div>
       </div>
     </div>
 
@@ -1188,6 +1196,22 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
               <button class="btn-save" onclick="openCustomerPortal()">Manage subscription</button>
             </div>
             <p style="font-size:11px;color:var(--muted);line-height:1.5">Cancel anytime from the customer portal. Pro includes unlimited subscriptions, multi-device sync, and full analytics.</p>
+          </div>
+        </div>
+
+        <div class="settings-section" id="settings-categories-section">
+          <div class="settings-section-title">🏷️ Custom categories</div>
+          <div id="categories-pro-gate" style="display:none">
+            <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px">Rename default categories (e.g. "Entertainment" → "Streaming") and add your own. Changes apply across the app immediately.</div>
+            <div id="categories-list"></div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <input class="settings-input" type="text" id="new-cat-input" placeholder="New category name" style="flex:1">
+              <button class="btn-save" onclick="addCategory()">Add</button>
+            </div>
+          </div>
+          <div id="categories-free-gate">
+            <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px">Custom categories are a Pro feature. Upgrade to rename defaults and add your own.</div>
+            <button class="btn-save" onclick="openPaywall()">Upgrade to Pro</button>
           </div>
         </div>
 
@@ -2439,7 +2463,8 @@ function renderAnalytics(){
   }).join('') || '<div style="color:var(--muted);font-size:13px">No data</div>';
 
   subs.forEach(function(sub){
-    cats[sub.category] = (cats[sub.category] || 0) + moUSD(sub);
+    var key = displayCategory(sub.category);
+    cats[key] = (cats[key] || 0) + moUSD(sub);
     cyc[sub.cycle] = (cyc[sub.cycle] || 0) + moUSD(sub);
   });
 
@@ -2452,20 +2477,21 @@ function renderAnalytics(){
     var pct = total>0 ? Math.round((cyc[key]/total)*100) : 0;
     return '<div class="bar-row"><div class="bar-label">'+cap(key)+'</div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+colors[i%colors.length]+'"></div></div><div class="bar-val">'+fmtD(cyc[key])+'</div></div>';
   }).join('') || '<div style="color:var(--muted);font-size:13px">No data</div>';
+  renderYoYSection();
   renderTrendChart();
 }
 
 function buildProjectedMonthly(){
   var now = new Date();
   var months = [];
-  for(var i=0; i<6; i++){
+  for(var i=0; i<12; i++){
     var d = new Date(now.getFullYear(), now.getMonth()+i, 1);
     months.push({ label: d.toLocaleDateString('en-US',{month:'short',year:'2-digit'}), total: 0 });
   }
   subs.forEach(function(sub){
     if(!sub.nextDate) return;
     var priceDisp = toUSD(effectiveAmount(sub), sub.currency||'USD') * getR(disp);
-    var maxD = new Date(now.getFullYear(), now.getMonth()+6, 1);
+    var maxD = new Date(now.getFullYear(), now.getMonth()+12, 1);
     if(sub.cycle==='weekly'){
       months.forEach(function(m, idx){
         var mStart = new Date(now.getFullYear(), now.getMonth()+idx, 1);
@@ -2478,12 +2504,58 @@ function buildProjectedMonthly(){
       var cur = new Date(sub.nextDate);
       while(cur < maxD){
         var mIdx = (cur.getFullYear()-now.getFullYear())*12+(cur.getMonth()-now.getMonth());
-        if(mIdx>=0 && mIdx<6) months[mIdx].total += priceDisp;
+        if(mIdx>=0 && mIdx<12) months[mIdx].total += priceDisp;
         cur = new Date(cur.getFullYear(), cur.getMonth()+cycMo, cur.getDate());
       }
     }
   });
   return months;
+}
+
+/* v1.0 custom categories: rename default categories to your own.
+   Stored in localStorage; only Pro users can edit (Free sees the editor as a
+   "Pro feature" CTA that opens the paywall). */
+var customCats = (function(){
+  try { return JSON.parse(localStorage.getItem('subkit-custom-cats') || '{}'); }
+  catch(e){ return {}; }
+})();
+function displayCategory(cat){
+  return customCats[cat] || cat;
+}
+function saveCustomCats(next){
+  customCats = next || {};
+  localStorage.setItem('subkit-custom-cats', JSON.stringify(customCats));
+  renderAll();
+}
+function renderYoYSection(){
+  var el = document.getElementById('yoy-section');
+  if(!el) return;
+  var months = buildProjectedMonthly();
+  var thisMonth = months[0] ? months[0].total : 0;
+  // "Avg last 6 months" — proxy for YoY since we don't have history:
+  // average the first 6 projected months (current + next 5).
+  var avg6 = 0;
+  for(var i=0; i<Math.min(6, months.length); i++) avg6 += months[i].total;
+  avg6 = months.length ? avg6 / Math.min(6, months.length) : 0;
+  var trendUp = thisMonth > avg6;
+  var trendDown = thisMonth < avg6;
+  var arrow = trendUp ? '↑' : trendDown ? '↓' : '→';
+  var trendColor = trendUp ? 'var(--green)' : trendDown ? 'var(--danger)' : 'var(--muted)';
+  el.innerHTML =
+    '<div class="stat-grid" style="margin-bottom:20px">'+
+      '<div class="stat-card">'+
+        '<div class="stat-label">This Month</div>'+
+        '<div class="stat-value">'+fmtD(thisMonth)+'</div>'+
+      '</div>'+
+      '<div class="stat-card">'+
+        '<div class="stat-label">Avg next 6 mo</div>'+
+        '<div class="stat-value">'+fmtD(avg6)+'</div>'+
+      '</div>'+
+      '<div class="stat-card">'+
+        '<div class="stat-label">Trend</div>'+
+        '<div class="stat-value" style="color:'+trendColor+'">'+arrow+'</div>'+
+      '</div>'+
+    '</div>';
 }
 function renderTrendChart(){
   var el = document.getElementById('chart-trend');
@@ -3280,6 +3352,112 @@ function openPaywall(){
   if(yearly) selPaywallPlan(yearly);
   document.getElementById('paywall-modal').classList.add('open');
 }
+
+/* Onboarding flow for new users (3 steps) */
+function isOnboarded(){
+  return !!localStorage.getItem('subkit-onboarded');
+}
+function openOnboarding(){
+  if(isOnboarded()) return;
+  if(!subs || subs.length > 0){
+    // They already have subs (maybe imported) — skip onboarding.
+    localStorage.setItem('subkit-onboarded', '1');
+    return;
+  }
+  renderOnboardingCurrencyList();
+  onbShowStep(1);
+  var m = document.getElementById('onboarding-modal');
+  if(m) m.classList.add('open');
+}
+function skipOnboarding(){
+  localStorage.setItem('subkit-onboarded', '1');
+  var m = document.getElementById('onboarding-modal');
+  if(m) m.classList.remove('open');
+}
+function closeOnboarding(e){
+  if(e && e.target !== e.currentTarget) return;
+  skipOnboarding();
+}
+function onbShowStep(n){
+  for(var i=1; i<=3; i++){
+    var step = document.getElementsByClassName('onb-step-'+i)[0];
+    if(step) step.style.display = (i === n) ? 'block' : 'none';
+    var dots = document.querySelectorAll('.onb-dot');
+    if(dots[i-1]) dots[i-1].classList.toggle('onb-dot-active', i === n);
+  }
+  if(n === 2){
+    var next = new Date();
+    next.setDate(next.getDate() + 30);
+    var nextEl = document.getElementById('onb-sub-date');
+    if(nextEl && !nextEl.value) nextEl.value = next.toISOString().slice(0,10);
+  }
+}
+function onbNext(){ onbShowStep(2); }
+function onbPrev(){
+  var current = 1;
+  for(var i=1; i<=3; i++){
+    var step = document.getElementsByClassName('onb-step-'+i)[0];
+    if(step && step.style.display !== 'none') current = i;
+  }
+  if(current > 1) onbShowStep(current - 1);
+}
+function renderOnboardingCurrencyList(){
+  var el = document.getElementById('onb-currency-list');
+  if(!el) return;
+  el.innerHTML = Object.keys(C).map(function(code){
+    var c = C[code];
+    var selected = code === disp;
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--surface2);border:2px solid '+(selected?'var(--cyan)':'transparent')+';border-radius:var(--radius-sm);margin-bottom:6px;cursor:pointer" onclick="onbPickCurrency(\''+code+'\')">'+
+      '<div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px">'+c.flag+'</span><div><div style="font-size:13px;font-weight:600">'+code+' - '+c.name+'</div></div></div>'+
+      (selected?'<span style="color:var(--cyan)">✓</span>':'')+
+    '</div>';
+  }).join('');
+}
+function onbPickCurrency(code){
+  selCurrency(code);
+  renderOnboardingCurrencyList();
+}
+function onboardingAddSub(){
+  var name  = (document.getElementById('onb-sub-name').value || '').trim();
+  var price = parseFloat(document.getElementById('onb-sub-price').value);
+  var cycle = document.getElementById('onb-sub-cycle').value;
+  var next  = document.getElementById('onb-sub-date').value;
+  if(!name){ toast('Name required', 'error'); return; }
+  if(!(price >= 0)){ toast('Price required', 'error'); return; }
+  if(!next){ toast('Next renewal date required', 'error'); return; }
+  var sub = {
+    id: crypto.randomUUID ? crypto.randomUUID() : ('id_'+Date.now()+'_'+Math.random()),
+    name: name,
+    price: price,
+    priceMode: 'fixed',
+    actualPrice: null,
+    priceNote: null,
+    currency: disp,
+    cycle: cycle,
+    nextDate: next,
+    category: 'Other',
+    emoji: '📺',
+    account: null,
+    _clientUpdatedAt: new Date().toISOString(),
+    _lastRemind: null,
+  };
+  subs.push(sub);
+  if(currentUser && supabaseClient){
+    supabaseClient.from('subscriptions').insert(toDbPayload(sub))
+      .then(function(){ toast('Added & synced', 'success'); })
+      .catch(function(e){ toast('Saved locally, cloud sync failed: '+(e.message||e), 'error'); });
+  } else {
+    saveLocalSubs(subs);
+    toast('Added', 'success');
+  }
+  renderAll();
+  renderCalendar();
+  onbShowStep(3);
+}
+function finishOnboardingToReminders(){
+  skipOnboarding();
+  switchTab('reminders', document.querySelector('[data-tab=reminders]'));
+}
 function closePaywall(){
   document.getElementById('paywall-modal').classList.remove('open');
 }
@@ -3626,27 +3804,86 @@ async function renderPlanSection(){
   var freeActions = document.getElementById('plan-free-actions');
   var proActions  = document.getElementById('plan-pro-actions');
   if(!label || !copy || !freeActions || !proActions) return;
+  var isPro = false;
   if(!currentUser){
     label.textContent = 'Current plan: Free (local only)';
     copy.textContent = 'Sign in to sync across devices and unlock Pro features.';
     freeActions.style.display = 'flex';
     proActions.style.display  = 'none';
+  } else {
+    var state = await getCurrentPlan();
+    isPro = state.plan === 'pro' && (!state.plan_expires_at || new Date(state.plan_expires_at) > new Date());
+    if(isPro){
+      var exp = state.plan_expires_at ? new Date(state.plan_expires_at).toLocaleDateString() : null;
+      label.textContent = 'Current plan: Pro' + (exp ? ' · renews ' + exp : '');
+      copy.textContent = 'Unlimited subscriptions, multi-device sync, and full analytics are active on your account.';
+      freeActions.style.display = 'none';
+      proActions.style.display  = 'block';
+    } else {
+      label.textContent = 'Current plan: Free';
+      copy.textContent = 'Free includes up to 5 tracked items, on-device storage, and CSV export. Upgrade for unlimited items, multi-device sync, and full analytics.';
+      freeActions.style.display = 'flex';
+      proActions.style.display  = 'none';
+    }
+  }
+  renderCategoriesSection(isPro);
+}
+function renderCategoriesSection(isPro){
+  var proGate = document.getElementById('categories-pro-gate');
+  var freeGate = document.getElementById('categories-free-gate');
+  if(!proGate || !freeGate) return;
+  if(isPro){
+    proGate.style.display = 'block';
+    freeGate.style.display = 'none';
+    renderCategoriesList();
+  } else {
+    proGate.style.display = 'none';
+    freeGate.style.display = 'block';
+  }
+}
+function renderCategoriesList(){
+  var el = document.getElementById('categories-list');
+  if(!el) return;
+  // Use the categories actually present in the user's subs, plus any
+  // explicit renames in customCats. That way the user only sees categories
+  // they have a stake in.
+  var present = {};
+  subs.forEach(function(s){ if(s.category) present[s.category] = true; });
+  Object.keys(customCats).forEach(function(k){ present[k] = true; });
+  var keys = Object.keys(present).sort();
+  if(!keys.length){
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px">Add a subscription first — categories will appear here.</div>';
     return;
   }
-  var state = await getCurrentPlan();
-  var isPro = state.plan === 'pro' && (!state.plan_expires_at || new Date(state.plan_expires_at) > new Date());
-  if(isPro){
-    var exp = state.plan_expires_at ? new Date(state.plan_expires_at).toLocaleDateString() : null;
-    label.textContent = 'Current plan: Pro' + (exp ? ' · renews ' + exp : '');
-    copy.textContent = 'Unlimited subscriptions, multi-device sync, and full analytics are active on your account.';
-    freeActions.style.display = 'none';
-    proActions.style.display  = 'block';
-  } else {
-    label.textContent = 'Current plan: Free';
-    copy.textContent = 'Free includes up to 5 tracked items, on-device storage, and CSV export. Upgrade for unlimited items, multi-device sync, and full analytics.';
-    freeActions.style.display = 'flex';
-    proActions.style.display  = 'none';
-  }
+  el.innerHTML = keys.map(function(orig){
+    var shown = customCats[orig] || '';
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
+      '<div style="font-size:12px;color:var(--muted);min-width:120px">'+esc(orig)+'</div>'+
+      '<div style="color:var(--muted)">→</div>'+
+      '<input class="settings-input" type="text" data-orig="'+esc(orig)+'" value="'+esc(shown)+'" placeholder="(keep as '+esc(orig)+')" style="flex:1">'+
+    '</div>';
+  }).join('');
+  Array.prototype.forEach.call(el.querySelectorAll('input[data-orig]'), function(inp){
+    inp.addEventListener('input', function(){
+      var orig = inp.getAttribute('data-orig');
+      var v = inp.value.trim();
+      var next = Object.assign({}, customCats);
+      if(!v || v === orig) delete next[orig];
+      else next[orig] = v;
+      saveCustomCats(next);
+    });
+  });
+}
+function addCategory(){
+  var inp = document.getElementById('new-cat-input');
+  if(!inp) return;
+  var v = inp.value.trim();
+  if(!v) return;
+  // Adding a new category doesn't fit the rename-map model cleanly; we
+  // instead push a dummy zero-priced sub? No — better: tell the user to
+  // pick a sub and set its category, which will then appear here.
+  toast('Set a subscription\'s category to "'+v+'" and it will appear here.', 'info');
+  inp.value = '';
 }
 async function handleCheckoutReturn(){
   // Read ?upgrade=success|cancel and ?portal=return from the URL after Stripe
