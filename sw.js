@@ -1,5 +1,5 @@
-const CACHE = 'subkit-v5';
-const SHELL = ['/', '/index.html', '/app.html', '/privacy', '/terms', '/changelog', '/icon.svg', '/manifest.json'];
+const CACHE = 'subkit-v6';
+const SHELL = ['/', '/index.html', '/app.html', '/privacy', '/terms', '/changelog', '/og.svg', '/icon.svg', '/manifest.json'];
 
 self.addEventListener('install', function(e) {
   self.skipWaiting();

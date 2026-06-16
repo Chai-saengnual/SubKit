@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a0a0f"/>
+      <stop offset="1" stop-color="#1c1c26"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4dd8e8"/>
+      <stop offset="1" stop-color="#4ddc9a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <text x="600" y="200" text-anchor="middle" font-family="Outfit, sans-serif" font-size="22" font-weight="600" fill="#4dd8e8" letter-spacing="0.08em">SUBKIT</text>
+  <text x="600" y="290" text-anchor="middle" font-family="Outfit, sans-serif" font-size="64" font-weight="700" fill="#f0f0f5">Your subscriptions,</text>
+  <text x="600" y="370" text-anchor="middle" font-family="Outfit, sans-serif" font-size="64" font-weight="700" fill="url(#accent)">one number you can trust.</text>
+  <text x="600" y="450" text-anchor="middle" font-family="Outfit, sans-serif" font-size="24" fill="#8e8ea8">Track in 5 seconds. Real reminders. No bank linking.</text>
+  <text x="600" y="570" text-anchor="middle" font-family="Space Mono, monospace" font-size="20" fill="#4dd8e8">subkit.app</text>
+</svg>
