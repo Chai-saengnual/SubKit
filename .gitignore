@@ -34,8 +34,8 @@ android/local.properties
 android/keystore.properties
 android-keystore/
 
-# Generated icons
-public/icons/
-
+# Generated icons (kept in git so the PWA manifest references work without a build step)
+# Re-generate with `node scripts/build-icons.mjs` after editing icon.svg
+# public/icons/
 # Vercel CLI
 .vercel
