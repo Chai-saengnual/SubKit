@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // scripts/build-icons.mjs
 // Generates raster app icons (192, 512, 1024) + a maskable icon (512 with safe zone)
-// from the SVG source at icon.svg. Outputs to /public/icons/ for the PWA manifest
+// from the SVG source at icon.svg. Outputs to /icons/ for the PWA manifest
 // and the native iOS/Android asset catalogs.
 //
 // Usage: node scripts/build-icons.mjs
@@ -16,7 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 const SOURCE = path.join(ROOT, 'icon.svg');
-const OUT_DIR = path.join(ROOT, 'public', 'icons');
+const OUT_DIR = path.join(ROOT, 'icons');
 
 async function buildOne(size, filename, maskable = false) {
   const svg = await fs.readFile(SOURCE, 'utf8');

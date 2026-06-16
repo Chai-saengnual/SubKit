@@ -42,8 +42,8 @@ vercel.json                 — serves the new .well-known files
 
 ```bash
 npm install
-node scripts/build-icons.mjs     # generates public/icons/icon-192.png, icon-512.png, etc.
-git add public/icons/ && git commit -m "chore: generate app icons"
+node scripts/build-icons.mjs     # generates icons/icon-192.png, icon-512.png, etc.
+git add icons/ && git commit -m "chore: generate app icons"
 git push                            # auto-deploys to Vercel, assets available at /icons/
 
 # iOS
