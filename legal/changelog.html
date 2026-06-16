@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Changelog — SubKit</title>
+<meta name="description" content="What's new in SubKit. Every release, every fix.">
+<style>
+:root {
+  --bg: #0a0a0f; --surface: #13131a; --surface2: #1c1c26;
+  --cyan: #4dd8e8; --cyan-dim: rgba(77,216,232,0.15);
+  --text: #f0f0f5; --muted: #8e8ea8; --muted-2: #3a3a50;
+  --green: #4ddc9a; --warn: #ffa64d; --danger: #ff5f7a;
+  --radius: 16px; --radius-sm: 10px;
+}
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.6;
+  padding: 80px 24px;
+}
+.wrap { max-width: 720px; margin: 0 auto; }
+a.back { color: var(--cyan); text-decoration: none; font-size: 14px; display: inline-block; margin-bottom: 24px; }
+a.back:hover { text-decoration: underline; }
+h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+.sub { color: var(--muted); font-size: 14px; margin-bottom: 40px; }
+.release { background: var(--surface); border: 1px solid var(--muted-2); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; }
+.release-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+.release-version { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.release-date { font-size: 13px; color: var(--muted); font-family: 'Space Mono', monospace; }
+.release-tag { display: inline-block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 100px; margin-left: 8px; }
+.tag-feature { background: var(--cyan-dim); color: var(--cyan); }
+.tag-fix { background: rgba(77,220,154,0.15); color: var(--green); }
+.tag-security { background: rgba(255,95,122,0.15); color: var(--danger); }
+.tag-perf { background: rgba(255,166,77,0.15); color: var(--warn); }
+h3 { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 8px; }
+ul { padding-left: 20px; }
+li { font-size: 15px; color: #b4b4c0; margin-bottom: 6px; }
+li strong { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Back to SubKit</a>
+  <h1>Changelog</h1>
+  <div class="sub">Every release, every fix, no marketing spin.</div>
+
+  <div class="release">
+    <div class="release-head">
+      <div><span class="release-version">v1.0.0</span><span class="release-tag tag-feature">Launch</span></div>
+      <div class="release-date">2026-06-16</div>
+    </div>
+    <h3>New</h3>
+    <ul>
+      <li><strong>Marketing site</strong> at <code>/</code> with hero, features, pricing, and FAQ</li>
+      <li><strong>App</strong> moved to <code>/app</code> with the v1.0 dark+minimax visual redesign</li>
+      <li><strong>Pro tier</strong> — $4.99/month or $39/year, Stripe Checkout wired up</li>
+      <li><strong>5-sub free tier</strong> — backend trigger enforces the limit; paywall modal catches the user when they hit it</li>
+      <li><strong>Settings → Plan section</strong> — shows your current plan, upgrade button, and customer portal link</li>
+      <li><strong>Stripe webhook</strong> — <code>checkout.session.completed</code>, <code>customer.subscription.updated</code>, and <code>customer.subscription.deleted</code> update <code>users.plan</code> in real time</li>
+    </ul>
+    <h3>Improved</h3>
+    <ul>
+      <li>New <strong>Outfit</strong> body font + <strong>Space Mono</strong> for numbers</li>
+      <li>Topnav with frosted glass effect, no more 240px sidebar</li>
+      <li>View-mode toggle on Tracked Items (grid / list)</li>
+      <li>Better contrast on muted text (5.3:1 vs surface)</li>
+    </ul>
+  </div>
+
+  <div class="release">
+    <div class="release-head">
+      <div><span class="release-version">v0.2.1</span></div>
+      <div class="release-date">2026-06-12</div>
+    </div>
+    <ul>
+      <li>Fixed CSP <code>frame-ancestors</code> console error (was inert in <code>&lt;meta&gt;</code> anyway)</li>
+      <li>Invoice attachment upload (Pro only, 10MB limit, PDFs + images)</li>
+      <li>CSV export of all subscriptions</li>
+      <li>Per-day reminder dedup — no more double-fire on the same day</li>
+    </ul>
+  </div>
+
+  <div class="release">
+    <div class="release-head">
+      <div><span class="release-version">v0.2.0</span></div>
+      <div class="release-date">2026-06-08</div>
+    </div>
+    <ul>
+      <li>Multi-currency with live exchange rates</li>
+      <li>Supabase auth: email, GitHub, Google</li>
+      <li>Cloud sync: your subs are now available across devices</li>
+      <li>EmailJS + Telegram reminder support</li>
+      <li>Coffee Mode (spend shown as ☕)</li>
+    </ul>
+  </div>
+
+  <div class="release">
+    <div class="release-head">
+      <div><span class="release-version">v0.1.0</span></div>
+      <div class="release-date">2026-05-30</div>
+    </div>
+    <ul>
+      <li>First public release. Add / edit / delete subscriptions, see your monthly total, see the calendar view.</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

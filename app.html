@@ -3168,7 +3168,7 @@ async function openCustomerPortal(){
     var sessionResult = await supabaseClient.auth.getSession();
     var accessToken = sessionResult.data.session ? sessionResult.data.session.access_token : null;
     if(!accessToken) throw new Error('No active session');
-    var res = await fetch(SUPABASE_FUNCTIONS_URL + '/create-checkout?action=portal', {
+    var res = await fetch(SUPABASE_FUNCTIONS_URL + '/customer-portal', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -3176,27 +3176,14 @@ async function openCustomerPortal(){
       },
     });
     if(!res.ok){
-      // Fall back to Stripe's hosted account portal lookup if the edge function
-      // doesn't expose a portal action yet — keeps the click non-broken while
-      // the portal endpoint is still being designed.
-      var fallback = await fetch(SUPABASE_FUNCTIONS_URL + '/customer-portal', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + accessToken,
-        },
-        body: JSON.stringify({ return_url: PROD_APP_URL + 'app?portal=return' }),
-      });
-      if(!fallback.ok) throw new Error('Portal not available (HTTP ' + fallback.status + ')');
-      var fb = await fallback.json();
-      if(!fb.url) throw new Error('No portal URL');
-      window.location.href = fb.url;
-      return;
+      var errText = await res.text();
+      throw new Error('Portal not available (HTTP ' + res.status + '): ' + errText);
     }
     var data = await res.json();
+    if(!data.url) throw new Error('No portal URL');
     window.location.href = data.url;
   } catch (e) {
-    toast('Customer portal not available yet — contact support@subkit.app', 'error');
+    toast('Could not open customer portal: ' + (e.message || e), 'error');
   }
 }
 async function getCurrentPlan(){

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy — SubKit</title>
+<meta name="description" content="SubKit's privacy policy. Manual subscription tracking, no bank linking, your data stays yours.">
+<link rel="stylesheet" href="/styles/marketing.css">
+<style>
+:root {
+  --bg: #0a0a0f; --surface: #13131a; --surface2: #1c1c26;
+  --cyan: #4dd8e8; --cyan-dim: rgba(77,216,232,0.15);
+  --text: #f0f0f5; --muted: #8e8ea8; --muted-2: #3a3a50;
+  --radius: 16px; --radius-sm: 10px;
+}
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.6;
+  padding: 80px 24px;
+}
+.wrap { max-width: 720px; margin: 0 auto; }
+a.back { color: var(--cyan); text-decoration: none; font-size: 14px; display: inline-block; margin-bottom: 24px; }
+a.back:hover { text-decoration: underline; }
+h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+.updated { color: var(--muted); font-size: 13px; margin-bottom: 32px; }
+h2 { font-size: 20px; font-weight: 600; margin-top: 32px; margin-bottom: 12px; color: var(--text); }
+h3 { font-size: 16px; font-weight: 600; margin-top: 20px; margin-bottom: 8px; }
+p, li { font-size: 15px; color: var(--text-secondary, #b4b4c0); margin-bottom: 12px; }
+ul { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-family: 'Space Mono', monospace; font-size: 13px; }
+hr { border: none; border-top: 1px solid var(--muted-2); margin: 32px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Back to SubKit</a>
+  <h1>Privacy Policy</h1>
+  <div class="updated">Last updated: June 16, 2026</div>
+
+  <p>SubKit is built around a simple principle: <strong>your subscription data is yours, and you shouldn't have to share your bank login to track what you pay for.</strong> This policy explains exactly what we collect, what we don't, and why.</p>
+
+  <h2>The short version</h2>
+  <ul>
+    <li>We do <strong>not</strong> connect to your bank. Ever. Manual entry only.</li>
+    <li>Free users: all data stays on your device (localStorage). Nothing is sent to our servers.</li>
+    <li>Pro users: your data syncs to our Supabase backend so it works across your devices.</li>
+    <li>We never sell your data. We never share it with advertisers. We never train AI on it.</li>
+  </ul>
+
+  <h2>What we collect</h2>
+  <h3>Account information (Pro only)</h3>
+  <p>When you create an account, we collect your email address and a hashed password. We use Supabase Auth for this — we never see your plaintext password.</p>
+  <h3>Subscription data (Pro only)</h3>
+  <p>The subscriptions you add: name, price, currency, billing cycle, next renewal date, category, emoji, optional account label, and any notes. This is what syncs across your devices.</p>
+  <h3>Invoice attachments (Pro only)</h3>
+  <p>PDFs and images you upload as invoice attachments. Stored in Supabase Storage, scoped to your user ID. Free users can't attach files.</p>
+  <h3>Payment information</h3>
+  <p>Payments are handled entirely by <strong>Stripe</strong>. We never see your card number. We only store a Stripe customer ID and subscription ID on your account so we know whether you're on the Free or Pro plan.</p>
+  <h3>Usage analytics</h3>
+  <p>We do <strong>not</strong> use third-party analytics, tracking pixels, or session replay tools. The only telemetry is server logs (Vercel + Supabase) for debugging.</p>
+
+  <h2>What we don't collect</h2>
+  <ul>
+    <li>Bank credentials, transaction history, or account balances (we don't integrate with banks at all)</li>
+    <li>Device fingerprints, advertising IDs, or cross-site tracking data</li>
+    <li>Location data beyond what your browser sends by default (your IP, which Vercel logs for ~24h)</li>
+    <li>Contacts, photos, microphone, or any other device permissions</li>
+  </ul>
+
+  <h2>Where your data lives</h2>
+  <p>Free users: data lives in your browser's localStorage on the device you set up. Clearing your browser data clears SubKit data. There's no account to delete.</p>
+  <p>Pro users: data lives in our Supabase project (hosted on AWS, us-east-1 region). We use row-level security so you can only ever see your own rows. Database backups are encrypted at rest.</p>
+
+  <h2>Reminders (optional)</h2>
+  <p>If you opt in, SubKit can send you renewal reminders via:</p>
+  <ul>
+    <li><strong>EmailJS</strong> — emails go directly from your browser to your email provider using your own EmailJS account. We don't see the email content.</li>
+    <li><strong>Telegram</strong> — messages are sent from your browser to Telegram's API using your own bot token. We don't see the message content.</li>
+  </ul>
+  <p>You can disable reminders at any time in Settings. Disabling deletes your EmailJS / Telegram config from localStorage immediately.</p>
+
+  <h2>Your rights</h2>
+  <p>You can at any time:</p>
+  <ul>
+    <li><strong>Export your data</strong> (Settings → Export CSV)</li>
+    <li><strong>Delete your account</strong> (Settings → Delete account) — this deletes all your data permanently within 7 days</li>
+    <li><strong>Request a copy of everything we have on you</strong> — email <a href="mailto:privacy@subkit.app">privacy@subkit.app</a> and we'll send it within 30 days</li>
+  </ul>
+
+  <h2>Children's privacy</h2>
+  <p>SubKit is not directed at children under 13. We don't knowingly collect data from children. If you believe a child has created an account, email <a href="mailto:privacy@subkit.app">privacy@subkit.app</a> and we'll delete it.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If we change anything material, we'll show an in-app banner before the change takes effect. The "Last updated" date above will reflect the change.</p>
+
+  <hr>
+  <p>Questions? <a href="mailto:privacy@subkit.app">privacy@subkit.app</a></p>
+</div>
+</body>
+</html>

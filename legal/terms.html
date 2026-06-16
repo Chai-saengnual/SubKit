@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terms — SubKit</title>
+<meta name="description" content="SubKit's terms of service. Plain language, no surprises.">
+<style>
+:root {
+  --bg: #0a0a0f; --surface: #13131a; --surface2: #1c1c26;
+  --cyan: #4dd8e8; --cyan-dim: rgba(77,216,232,0.15);
+  --text: #f0f0f5; --muted: #8e8ea8; --muted-2: #3a3a50;
+  --radius: 16px; --radius-sm: 10px;
+}
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.6;
+  padding: 80px 24px;
+}
+.wrap { max-width: 720px; margin: 0 auto; }
+a.back { color: var(--cyan); text-decoration: none; font-size: 14px; display: inline-block; margin-bottom: 24px; }
+a.back:hover { text-decoration: underline; }
+h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+.updated { color: var(--muted); font-size: 13px; margin-bottom: 32px; }
+h2 { font-size: 20px; font-weight: 600; margin-top: 32px; margin-bottom: 12px; color: var(--text); }
+p, li { font-size: 15px; color: #b4b4c0; margin-bottom: 12px; }
+ul { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-family: 'Space Mono', monospace; font-size: 13px; }
+hr { border: none; border-top: 1px solid var(--muted-2); margin: 32px 0; }
+strong { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">← Back to SubKit</a>
+  <h1>Terms of Service</h1>
+  <div class="updated">Last updated: June 16, 2026</div>
+
+  <p>By using SubKit you agree to these terms. We've kept them short and in plain language — no lawyer-speak traps.</p>
+
+  <h2>What SubKit is</h2>
+  <p>SubKit is a personal subscription and bill tracker. You add your subscriptions manually. We remind you before they renew. That's the whole product.</p>
+
+  <h2>What you agree to do</h2>
+  <ul>
+    <li>Provide accurate subscription info (or, you know, your best guess — we don't verify)</li>
+    <li>Use SubKit for personal subscription tracking, not for spam, scraping, or commercial data mining</li>
+    <li>Don't try to break the service or get around the free tier limit by creating multiple accounts</li>
+    <li>If you cancel Pro, your data stays accessible in read-only mode for 30 days, then gets deleted</li>
+  </ul>
+
+  <h2>What we agree to do</h2>
+  <ul>
+    <li>Keep SubKit running and your data accessible (we target 99.9% uptime for Pro, best-effort for Free)</li>
+    <li>Never sell your data, share it with advertisers, or train AI on it</li>
+    <li>Be honest about pricing — no hidden fees, no surprise charges</li>
+    <li>Give you 30 days notice by email before any price change for Pro</li>
+    <li>Make it easy to export and delete your data at any time</li>
+  </ul>
+
+  <h2>Pricing and billing</h2>
+  <p><strong>Free tier:</strong> $0 forever. Up to 5 subscriptions. localStorage only. No account required.</p>
+  <p><strong>Pro tier:</strong> $4.99/month or $39/year. Unlimited subscriptions, multi-device sync, invoice attachments, full analytics.</p>
+  <p>Pro is billed by Stripe. You can cancel anytime in Settings → Manage subscription. Cancellation takes effect at the end of the current billing period — we don't pro-rate, but we don't charge you for the next period either.</p>
+  <p>Refunds: if you cancel within 7 days of a charge, email <a href="mailto:support@subkit.app">support@subkit.app</a> and we'll refund it. After 7 days, no refunds — but your Pro access continues to the end of the period.</p>
+
+  <h2>No warranty</h2>
+  <p>SubKit is provided "as is." We do our best to make it accurate and reliable, but:</p>
+  <ul>
+    <li>Reminders are best-effort. Don't rely on SubKit as your only reminder system for critical bill payments.</li>
+    <li>Exchange rates come from a third-party API and may be delayed. Always verify on your bank's actual rate before making decisions based on converted amounts.</li>
+    <li>We may change, pause, or discontinue features with reasonable notice.</li>
+  </ul>
+
+  <h2>Limitation of liability</h2>
+  <p>If SubKit causes you to miss a payment or get charged for a subscription you meant to cancel, our liability is limited to the amount you paid us in the 12 months before the incident. We can't be liable for indirect damages (lost profits, lost data beyond what's in our backups, etc.).</p>
+
+  <h2>Account termination</h2>
+  <p>You can delete your account anytime in Settings. We'll permanently delete your data within 7 days. Backups are purged within 30 days.</p>
+  <p>We may suspend or terminate accounts that violate these terms (mainly: abuse, scraping, fraud). We'll give you notice first unless it's an emergency.</p>
+
+  <h2>Changes to these terms</h2>
+  <p>If we change anything material, we'll show an in-app banner and email Pro users at least 30 days before the change takes effect. If you don't agree to the new terms, you can cancel Pro and get a pro-rated refund for the unused portion.</p>
+
+  <h2>Governing law</h2>
+  <p>These terms are governed by the laws of Thailand (where the founder is based). Disputes will be handled in Bangkok courts. If this is a problem for you, email us and we'll work it out.</p>
+
+  <hr>
+  <p>Questions? <a href="mailto:support@subkit.app">support@subkit.app</a></p>
+</div>
+</body>
+</html>
