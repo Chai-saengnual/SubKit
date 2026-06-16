@@ -28,7 +28,7 @@ Every subscription tracker I tried wanted my bank login. That's a 10-foot pole n
 **Revenue model:**
 
 - 5-sub free tier enforced by a Postgres BEFORE INSERT trigger
-- Pro at $4.99/mo or $39/yr unlocks: multi-device sync, unlimited subs, invoice attachments, full analytics
+- Pro at $4.99/mo or $39/yr unlocks: multi-device sync, unlimited subs, unlimited invoice attachments, full analytics
 - Target: 2-5% free → Pro conversion based on the competitor's data
 
 **What I learned the hard way:**

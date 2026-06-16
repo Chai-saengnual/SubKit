@@ -47,7 +47,7 @@ I built this because I was tired of subscription trackers that want my bank logi
 So SubKit is the opposite:
 - **No bank OAuth.** Manual entry, takes 5 seconds per item.
 - **Free for up to 5 subscriptions, forever.** The free tier is actually useful.
-- **Pro ($4.99/mo or $39/yr)** only unlocks things that NEED server-side state: multi-device sync, invoice attachments, full analytics. No "premium themes" or "remove ads" nonsense.
+- **Pro ($4.99/mo or $39/yr)** only unlocks things that NEED server-side state: multi-device sync, unlimited invoice attachments, full analytics. No "premium themes" or "remove ads" nonsense.
 
 A few things I'm proud of:
 - **The 5-sub free-tier limit is enforced by a Postgres trigger**, not by the frontend. Try to bypass it with curl — you can't.

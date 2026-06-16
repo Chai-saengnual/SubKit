@@ -27,7 +27,7 @@ So SubKit is the boring version:
   quarterly / yearly cycles
 - You get an email or Telegram ping 3 days before anything renews
 - The free tier holds 5 subscriptions forever; Pro ($4.99/mo or $39/yr) adds
-  multi-device sync, invoice attachments, full analytics, and unlimited subs
+  multi-device sync, unlimited invoice attachments, full analytics, and unlimited subs
 
 Stack if anyone cares:
 - Single-file PWA (one index.html + one app.html, ~4000 lines of vanilla JS, no
