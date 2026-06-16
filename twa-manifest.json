@@ -1,0 +1,43 @@
+{
+  "packageId": "app.subkit.tracker",
+  "host": "subkit-ten.vercel.app",
+  "name": "SubKit",
+  "launcherName": "SubKit",
+  "display": "standalone",
+  "themeColor": "#0a0a0f",
+  "backgroundColor": "#0a0a0f",
+  "startUrl": "/",
+  "iconUrl": "https://subkit-ten.vercel.app/icons/icon-512.png",
+  "maskableIconUrl": "https://subkit-ten.vercel.app/icons/icon-maskable-512.png",
+  "splashColor": "#0a0a0f",
+  "splashFadeOutDuration": 300,
+  "signing": {
+    "keystorePath": "./android.keystore",
+    "keystorePasswordAlias": "android",
+    "keystorePasswordValue": "REPLACE_ME",
+    "keyPasswordValue": "REPLACE_ME"
+  },
+  "appVersion": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Add subscription",
+      "shortcutId": "add",
+      "webUrl": "/app#add"
+    },
+    {
+      "name": "View analytics",
+      "shortcutId": "analytics",
+      "webUrl": "/app#analytics"
+    }
+  ],
+  "additionalTrustedOrigins": [],
+  "retainedSplashColors": [],
+  "generatorApp": "SubKit TWA scaffold (bubblewrap)",
+  "webManifestUrl": "https://subkit-ten.vercel.app/manifest.json",
+  "fallbackType": "customtabs",
+  "siteSettings": {
+    "display": "standalone",
+    "orientation": "portrait"
+  }
+}

@@ -16,3 +16,26 @@ pnpm-debug.log*
 # Editor settings
 .vscode/
 .idea/
+
+# Node + native build artifacts
+node_modules/
+ios/Pods/
+ios/build/
+ios/App/build/
+ios/App.xcodeproj/
+ios/App.xcworkspace/
+ios/App/App.xcodeproj/
+ios/App/App.xcworkspace/
+android/app/build/
+android/build/
+android/.gradle/
+android/.idea/
+android/local.properties
+android/keystore.properties
+android-keystore/
+
+# Generated icons
+public/icons/
+
+# Vercel CLI
+.vercel

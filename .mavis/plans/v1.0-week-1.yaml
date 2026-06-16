@@ -1,0 +1,936 @@
+version: 1
+plan:
+  name: 'SubKit v1.0 Week 1 — paywall, Stripe, visual polish'
+  max_concurrency: 4
+  max_consecutive_failures: 2
+  max_cycles: 8
+  auto_reject_retries: 1
+  verifier_config:
+    default_verifiers: [verifier]
+    audit_sample_rate: 0.0
+tasks:
+  - id: visual-redesign
+    title: 'port v1.0 dark+minimax CSS to index.html + add view-mode toggle'
+    prompt: |
+      Read the PRD at `docs/v1.0-prd.md` §6.1, §11 task 1. Read the reference mockup at `mockup-v1-dark.html` (this is the visual target — 600 lines of CSS that need to land in `index.html`).
+
+      All changes go in `index.html` (current size 2889 lines). Branch: `codex/v1.0-week-1` (create from `origin/main` if not exists).
+
+      ## Change 1: Add new CSS variables to `:root` (around line 21-29)
+
+      Add these new tokens to the existing `:root` block:
+
+      ```css
+      --radius-sm: 12px;
+      --radius-md: 16px;
+      --radius-lg: 20px;
+      --radius-pill: 32px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.4);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,0.4), 0 4px 8px rgba(0,0,0,0.3);
+      --border: rgba(255,255,255,0.06);
+      --border-strong: rgba(255,255,255,0.10);
+      --primary-glow: rgba(77,216,232,0.25);
+      --muted-text: #b4b4c0;
+      --text-secondary: #b4b4c0;
+      --warn-color: #ffa64d;
+      --danger-color: #ff5f7a;
+      --green-color: #4ddc9a;
+      --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'Space Mono', ui-monospace, monospace;
+      ```
+
+      Do NOT delete the existing `--radius`, `--radius-sm`, `--cyan-dim`, etc. — keep them, the new ones supplement.
+
+      ## Change 2: Replace the font picker default to Outfit
+
+      In the theme bootstrap inline script (around line 13), the body font is read from localStorage. Default it to 'Outfit' (not 'DM Sans').
+
+      In the `<link>` for Google Fonts (around line 15), swap the font URL to:
+      ```html
+      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+      ```
+
+      Remove the legacy 5-font pickers from Settings (around line 797-801 — the `font-btn` elements). Replace with a single readonly display: "Body font: Outfit (default)". The font picker feature is being removed in v1.0.
+
+      ## Change 3: Add new CSS classes for v1.0 components
+
+      Append a new section at the END of the existing `<style>` block (just before the closing `</style>` tag). Add these classes verbatim from `mockup-v1-dark.html`:
+
+      - `.topnav` and related (sticky top nav bar with frosted glass effect)
+      - `.brand`, `.brand-mark`, `.nav`, `.nav-item`, `.btn`, `.btn-primary`, `.btn-secondary`
+      - `.hero-grid`, `.stat-card`, `.stat-card.hero`, `.stat-label`, `.stat-value`, `.stat-meta`, `.stat-pill`
+      - `.cols` (two-column body layout)
+      - `.panel`, `.panel-head`, `.panel-title`, `.panel-link`
+      - `.card-grid`, `.sub-card`, `.sub-card-icon`, `.sub-card-name`, `.sub-card-cat`, `.sub-card-price`, `.sub-card-cycle`, `.sub-card-badge`
+      - `.renewal-item`, `.renewal-icon`, `.renewal-info`, `.renewal-name`, `.renewal-when`, `.renewal-amount`
+      - `.bar-row`, `.bar-label`, `.bar-track`, `.bar-fill`, `.bar-val`
+      - `.page-title`, `.page-sub`, `.page-head`, `.greeting-dot`
+
+      Important: copy them VERBATIM from the mockup. Do not "improve" or "consolidate". They have subtle values (--shadow-sm `0.85` opacity, etc.) that match the visual.
+
+      ## Change 4: Restructure the HTML body to use new components
+
+      The current structure has a 240px sidebar + main. Restructure to:
+      - Remove the existing `.sidebar` element (or hide it via display:none — keep the markup for v1.1 fallback)
+      - Add `<nav class="topnav">` as the FIRST child of `.shell`
+      - Add `margin-top: 64px;` to the `.main` element so it sits below the topnav
+      - Add a view-mode toggle button in the "Tracked Items" subs-toolbar (line 695ish) that flips between list view and card grid view. State stored in `localStorage` as `subkit-view-mode` ('list' | 'grid'). Default: 'grid'.
+      - The card grid view uses the new `.card-grid` + `.sub-card` classes. The list view is the existing row layout.
+
+      ## Change 5: Add the paywall modal scaffolding (UI only, no logic)
+
+      Add a new modal `<div class="modal-overlay" id="paywall-modal" onclick="closeModal(event,'paywall-modal')">` with:
+      - Title: "Unlock unlimited tracking"
+      - Subtitle: "You've reached the 5-subscription free limit. Upgrade to Pro for unlimited items, multi-device sync, and full analytics."
+      - 3 plan cards: Monthly ($4.99/mo), Yearly ($39/yr, save 35%), Current plan badge for Pro
+      - "Continue with Free" button that closes the modal
+      - "Upgrade to Pro" button (no handler — that's the next track)
+
+      Mark this track as "UI only" — the trigger logic and Stripe integration come in the parallel tracks.
+
+      ## Change 6: Keep the 88 inline onclick handlers working
+
+      Verify after the restructure that all 88 `onclick=` handlers still work. Use:
+      ```bash
+      grep -c 'onclick=' index.html
+      ```
+      Should output 88 or higher (the paywall modal adds 2-3 new ones).
+
+      ## Static checks (run from repo root, capture output in deliverable.md)
+
+      ```bash
+      node -e "
+      const fs = require('fs');
+      const html = fs.readFileSync('index.html', 'utf8');
+      const checks = {
+        'Outfit font loaded': html.includes('Outfit:wght@300;400;500;600;700'),
+        'topnav class present': html.includes('class=\"topnav\"'),
+        'card-grid class present': html.includes('class=\"card-grid\"'),
+        'sub-card class present': html.includes('class=\"sub-card\"'),
+        'paywall-modal element': html.includes('id=\"paywall-modal\"'),
+        '--radius-pill token': html.includes('--radius-pill'),
+        '--shadow-md token': html.includes('--shadow-md'),
+        'DM Sans removed from picker': !html.includes('Inter</span>') && !html.includes('Nunito</span>')
+      };
+      Object.entries(checks).forEach(([k,v]) => console.log((v?'OK ':'FAIL ')+k));
+      process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
+      "
+      ```
+
+      All 8 must pass.
+
+      Do NOT touch: supabase files, package.json (doesn't exist), other docs.
+      Do NOT modernize the file. Match the existing `var` / no-semicolon / 2-space-indent style.
+
+      Commit message: `feat(v1.0): port dark+minimax visual, add view-mode toggle + paywall modal`
+    assigned_to: coder
+    verified_by: verifier
+    verify_prompt: |
+      Branch: `codex/v1.0-week-1`. Verify the visual redesign in `index.html`:
+
+      1. **CSS tokens added** (Change 1): read `:root` block, confirm `--radius-pill: 32px`, `--shadow-md`, `--border`, `--border-strong`, `--primary-glow`, `--font-body: 'Outfit'` are all present. Confirm `--font-mono: 'Space Mono', ui-monospace, monospace` is added.
+
+      2. **Font swap** (Change 2): confirm the Google Fonts `<link>` now loads Outfit + Space Mono only. Confirm the 5-font picker (Inter/Nunito/Sora/Space Grotesk) buttons are removed from Settings. Run `grep -c "data-font=" index.html` — should output 0.
+
+      3. **New CSS classes** (Change 3): for each of `.topnav`, `.brand`, `.brand-mark`, `.nav-item`, `.btn-primary`, `.btn-secondary`, `.hero-grid`, `.stat-card`, `.cols`, `.card-grid`, `.sub-card`, `.renewal-item`, `.bar-row`, `.page-title`, confirm they exist in the `<style>` block.
+
+      4. **HTML restructure** (Change 4): confirm:
+         - A `<nav class="topnav">` element exists as a child of `.shell`
+         - The `.main` element has `margin-top: 64px` style (or computed equivalent)
+         - A view-mode toggle button exists in the subs-toolbar
+         - `localStorage.getItem('subkit-view-mode')` is referenced in the JS (defaults to 'grid')
+         - The `.sub-row` (existing list view) markup is still there, just hidden when grid mode is on
+
+      5. **Paywall modal** (Change 5): confirm the `<div class="modal-overlay" id="paywall-modal" ...>` exists, contains the 3 plan cards, and has "Upgrade to Pro" + "Continue with Free" buttons. Confirm NO click handler is wired yet (no `onclick="upgradeToPro()"` or similar — that's next track).
+
+      6. **No regressions**:
+         - `grep -c 'onclick=' index.html` ≥ 88
+         - `esc()` function byte-identical (git diff on the `function esc` line)
+         - The 1700+ lines of existing JS untouched (git diff should show ≤ 700 lines of changes, mostly CSS additions and HTML restructuring)
+         - Total line count delta < 800 lines (the CSS additions are ~600 lines)
+
+      7. **Browser test**: use the chrome-headless-shell binary at `/Users/chalermpolsaengnual/Library/Caches/ms-playwright/chromium_headless_shell-1223/chrome-headless-shell-mac-arm64/chrome-headless-shell` with `--headless=new --no-sandbox --window-size=1440,900 --screenshot=/tmp/v1-visual.png` against `file:///Users/chalermpolsaengnual/Library/CloudStorage/OneDrive-Personal/01-CHAI_WORKSPACE/01-CHAI PROJECTS/Dev-Projects/Project-Subkit/index.html`. Save screenshot. Visually inspect (open the file): top nav should be visible, no sidebar, dark theme, card grid on Tracked Items.
+
+      FAIL with exact line numbers if any check fails. PASS only if all 7 are green.
+    timeout_ms: 1800000
+
+  - id: users-table-and-paywall-trigger
+    title: 'users table migration + 5-sub free tier trigger + plan-check helper'
+    prompt: |
+      Read the PRD at `docs/v1.0-prd.md` §6.3, §11 tasks 2-3. Read the existing migration pattern at `supabase/migrations/20260612170000_create_subscription_invoices.sql` to match the style.
+
+      Branch: `codex/v1.0-week-1` (create from `origin/main`).
+
+      ## File 1: `supabase/migrations/20260615210000_create_users_table.sql`
+
+      New migration. Mirrors the style of existing migrations (snake_case timestamps, idempotent where possible).
+
+      ```sql
+      -- Users table — one row per Supabase auth.users entry.
+      -- Holds the plan state (free | pro) and Stripe customer linkage.
+      -- Created with a trigger that auto-inserts a users row whenever
+      -- a new auth.users row is created, so the app can always JOIN.
+      create table if not exists public.users (
+        id uuid primary key references auth.users(id) on delete cascade,
+        email text not null,
+        plan text not null default 'free' check (plan in ('free', 'pro')),
+        plan_expires_at timestamptz,
+        stripe_customer_id text,
+        stripe_subscription_id text,
+        created_at timestamptz not null default timezone('utc', now()),
+        updated_at timestamptz not null default timezone('utc', now())
+      );
+
+      create index if not exists users_stripe_customer_id_idx
+        on public.users (stripe_customer_id)
+        where stripe_customer_id is not null;
+
+      drop trigger if exists set_users_updated_at on public.users;
+      create trigger set_users_updated_at
+      before update on public.users
+      for each row
+      execute function public.handle_updated_at();
+
+      -- RLS: a user can read/update their own row only.
+      alter table public.users enable row level security;
+
+      create policy "Users can view their own profile"
+        on public.users for select
+        to authenticated
+        using ((select auth.uid()) = id);
+
+      create policy "Users can update their own profile"
+        on public.users for update
+        to authenticated
+        using ((select auth.uid()) = id)
+        with check ((select auth.uid()) = id);
+
+      -- Service role can do anything (used by stripe-webhook edge function)
+      create policy "Service role has full access"
+        on public.users for all
+        to service_role
+        using (true)
+        with check (true);
+
+      -- Auto-create a users row when auth.users gets a new row.
+      create or replace function public.handle_new_auth_user()
+      returns trigger
+      language plpgsql
+      security definer
+      as $$
+      begin
+        insert into public.users (id, email)
+        values (new.id, new.email)
+        on conflict (id) do nothing;
+        return new;
+      end;
+      $$;
+
+      drop trigger if exists on_auth_user_created on auth.users;
+      create trigger on_auth_user_created
+      after insert on auth.users
+      for each row
+      execute function public.handle_new_auth_user();
+      ```
+
+      ## File 2: `supabase/migrations/20260615220000_free_tier_limit.sql`
+
+      Trigger on `subscriptions` to enforce 5-sub limit for free users.
+
+      ```sql
+      -- Free-tier enforcement: free users can have at most 5 rows
+      -- in public.subscriptions. Pro users (users.plan = 'pro') are
+      -- exempt. Edge function and app code handle the friendly error;
+      -- this trigger is the hard backend gate.
+      create or replace function public.check_free_tier_limit()
+      returns trigger
+      language plpgsql
+      as $$
+      declare
+        user_plan text;
+        current_count integer;
+      begin
+        select plan into user_plan
+        from public.users
+        where id = auth.uid();
+
+        if user_plan is distinct from 'pro' then
+          select count(*) into current_count
+          from public.subscriptions
+          where user_id = auth.uid();
+
+          if current_count >= 5 then
+            raise exception 'FREE_TIER_LIMIT_REACHED'
+              using errcode = 'P0001',
+                    hint = 'Free tier limited to 5 subscriptions. Upgrade to Pro for unlimited.';
+          end if;
+        end if;
+
+        return new;
+      end;
+      $$;
+
+      drop trigger if exists enforce_free_tier_limit on public.subscriptions;
+      create trigger enforce_free_tier_limit
+      before insert on public.subscriptions
+      for each row
+      execute function public.check_free_tier_limit();
+      ```
+
+      Note: the same trigger should also fire on `subscription_invoices` (separate 5 limit, per PRD §4.1). For now, ship the subscriptions trigger only — invoices can be added in a follow-up.
+
+      ## File 3: `supabase/functions/_shared/plan.ts`
+
+      Shared helper used by the edge functions. Export the function that reads the user's plan.
+
+      ```typescript
+      // supabase/functions/_shared/plan.ts
+      import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+      export type Plan = 'free' | 'pro'
+
+      export interface PlanState {
+        plan: Plan
+        plan_expires_at: string | null
+        stripe_customer_id: string | null
+        stripe_subscription_id: string | null
+      }
+
+      export async function getPlan(
+        supabaseUrl: string,
+        supabaseServiceKey: string,
+        userId: string
+      ): Promise<PlanState> {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey)
+        const { data, error } = await supabase
+          .from('users')
+          .select('plan, plan_expires_at, stripe_customer_id, stripe_subscription_id')
+          .eq('id', userId)
+          .single()
+        if (error || !data) {
+          return { plan: 'free', plan_expires_at: null, stripe_customer_id: null, stripe_subscription_id: null }
+        }
+        return data as PlanState
+      }
+
+      export function isPro(state: PlanState): boolean {
+        if (state.plan !== 'pro') return false
+        if (!state.plan_expires_at) return true  // no expiry = lifetime/manual
+        return new Date(state.plan_expires_at) > new Date()
+      }
+      ```
+
+      ## Static checks (run from repo root, capture output in deliverable.md)
+
+      ```bash
+      ls -la supabase/migrations/20260615210000_*.sql supabase/migrations/20260615220000_*.sql supabase/functions/_shared/plan.ts
+      echo "---sql is non-empty---"
+      wc -l supabase/migrations/20260615210000_*.sql supabase/migrations/20260615220000_*.sql supabase/functions/_shared/plan.ts
+      echo "---function is exported---"
+      grep -c "^export" supabase/functions/_shared/plan.ts
+      ```
+
+      All 3 files exist, all have content, plan.ts has at least 3 exports.
+
+      Do NOT touch: index.html, sw.js, manifest.json, the existing edge function.
+      Commit message: `feat(v1.0): users table + free-tier trigger + plan helper`
+    assigned_to: coder
+    verified_by: verifier
+    verify_prompt: |
+      Branch: `codex/v1.0-week-1`. Verify the 3 files:
+
+      1. **`supabase/migrations/20260615210000_create_users_table.sql`** exists and:
+         - Creates `public.users` table with `id`, `email`, `plan` (check constraint on 'free'|'pro'), `plan_expires_at`, `stripe_customer_id`, `stripe_subscription_id`, `created_at`, `updated_at`
+         - Has `handle_updated_at` trigger
+         - Has RLS enabled + 3 policies (user SELECT, user UPDATE, service_role ALL)
+         - Has `handle_new_auth_user` SECURITY DEFINER function + `on_auth_user_created` trigger
+         - Filename timestamp (20260615210000) is later than the most recent existing migration
+
+      2. **`supabase/migrations/20260615220000_free_tier_limit.sql`** exists and:
+         - Creates `check_free_tier_limit()` function that reads `users.plan` and raises `FREE_TIER_LIMIT_REACHED` exception with `errcode = 'P0001'`
+         - Trigger fires BEFORE INSERT on `public.subscriptions`
+         - Idempotent (`drop trigger if exists` + `create trigger` pattern)
+         - Filename timestamp (20260615220000) is later than file 1
+
+      3. **`supabase/functions/_shared/plan.ts`** exists and:
+         - Exports `Plan` type ('free' | 'pro')
+         - Exports `PlanState` interface
+         - Exports `getPlan(supabaseUrl, supabaseServiceKey, userId): Promise<PlanState>` function
+         - Exports `isPro(state): boolean` helper that handles expired `plan_expires_at`
+         - Compiles: `deno check supabase/functions/_shared/plan.ts` returns 0 (or just verify syntax with a quick parse — deno is installed)
+
+      4. **No regressions in existing migrations**: `git diff origin/main -- supabase/migrations/20260612*.sql` shows no changes to existing files. Existing 9 migrations are untouched.
+
+      FAIL with exact line numbers if any check fails.
+    timeout_ms: 1500000
+
+  - id: stripe-edge-functions
+    title: 'Stripe Checkout: create-checkout + stripe-webhook edge functions (test mode)'
+    prompt: |
+      Read the PRD at `docs/v1.0-prd.md` §6.2, §11 task 4. Read the existing edge function at `supabase/functions/send-reminders/index.ts` to match the style (Deno, esm.sh, CORS headers, bearer auth).
+
+      Branch: `codex/v1.0-week-1` (create from `origin/main`).
+
+      ## File 1: `supabase/functions/create-checkout/index.ts`
+
+      Creates a Stripe Checkout Session and returns the URL the user should be redirected to.
+
+      ```typescript
+      import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+      import Stripe from 'https://esm.sh/stripe@13?target=deno'
+
+      const corsHeaders = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      }
+
+      // Stripe price IDs — in test mode, these are created via
+      // `stripe prices create --product=prod_xxx` and stored as secrets.
+      // The function reads them from env so the same code works for
+      // both monthly and yearly modes.
+      const PRICE_IDS = {
+        monthly: Deno.env.get('STRIPE_PRICE_MONTHLY')!,
+        yearly: Deno.env.get('STRIPE_PRICE_YEARLY')!,
+      }
+
+      const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY')!
+      const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+      const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      const SITE_URL = Deno.env.get('SITE_URL') ?? 'https://subkit-ten.vercel.app'
+
+      Deno.serve(async (req) => {
+        if (req.method === 'OPTIONS') {
+          return new Response('ok', { headers: corsHeaders })
+        }
+
+        // Auth: require the caller's JWT so we know which user is upgrading.
+        const authHeader = req.headers.get('Authorization')
+        if (!authHeader) {
+          return new Response('Unauthorized', { status: 401, headers: corsHeaders })
+        }
+
+        const userClient = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_ANON_KEY')!, {
+          global: { headers: { Authorization: authHeader } },
+        })
+        const { data: { user }, error: userErr } = await userClient.auth.getUser()
+        if (userErr || !user) {
+          return new Response('Unauthorized', { status: 401, headers: corsHeaders })
+        }
+
+        let body: { plan?: 'monthly' | 'yearly' }
+        try {
+          body = await req.json()
+        } catch {
+          return new Response('Invalid JSON', { status: 400, headers: corsHeaders })
+        }
+        const plan = body.plan ?? 'monthly'
+        const priceId = PRICE_IDS[plan]
+        if (!priceId) {
+          return new Response(`No Stripe price configured for plan="${plan}"`, {
+            status: 500,
+            headers: corsHeaders,
+          })
+        }
+
+        const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-04-10' })
+
+        // Service-role client for users-table read/write.
+        const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+        // Look up the user's email + existing stripe customer id.
+        const { data: userRow } = await adminClient
+          .from('users')
+          .select('email, stripe_customer_id')
+          .eq('id', user.id)
+          .single()
+
+        let customerId = userRow?.stripe_customer_id
+        if (!customerId) {
+          const customer = await stripe.customers.create({
+            email: userRow?.email ?? user.email!,
+            metadata: { supabase_user_id: user.id },
+          })
+          customerId = customer.id
+          await adminClient
+            .from('users')
+            .update({ stripe_customer_id: customerId })
+            .eq('id', user.id)
+        }
+
+        const session = await stripe.checkout.sessions.create({
+          customer: customerId,
+          mode: 'subscription',
+          line_items: [{ price: priceId, quantity: 1 }],
+          success_url: `${SITE_URL}/app?upgrade=success`,
+          cancel_url: `${SITE_URL}/app?upgrade=cancel`,
+          client_reference_id: user.id,
+          metadata: { supabase_user_id: user.id, plan },
+          subscription_data: {
+            metadata: { supabase_user_id: user.id, plan },
+          },
+        })
+
+        return new Response(JSON.stringify({ url: session.url }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      })
+      ```
+
+      ## File 2: `supabase/functions/stripe-webhook/index.ts`
+
+      Receives Stripe webhooks and updates `users.plan` accordingly.
+
+      ```typescript
+      import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+      import Stripe from 'https://esm.sh/stripe@13?target=deno'
+
+      const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY')!
+      const STRIPE_WEBHOOK_SECRET = Deno.env.get('STRIPE_WEBHOOK_SECRET')!
+      const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+      const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+      Deno.serve(async (req) => {
+        // Stripe sends the raw body; we need to verify the signature.
+        const signature = req.headers.get('stripe-signature')
+        if (!signature) {
+          return new Response('Missing stripe-signature header', { status: 400 })
+        }
+
+        const body = await req.text()
+        const stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-04-10' })
+
+        let event: Stripe.Event
+        try {
+          event = await stripe.webhooks.constructEventAsync(
+            body, signature, STRIPE_WEBHOOK_SECRET
+          )
+        } catch (err) {
+          console.error('Webhook signature verification failed:', err)
+          return new Response(`Webhook Error: ${(err as Error).message}`, { status: 400 })
+        }
+
+        const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+        // Helper: resolve a user id from a Stripe subscription's metadata.
+        async function getUserIdFromSub(sub: Stripe.Subscription): Promise<string | null> {
+          const meta = (sub.metadata?.supabase_user_id ?? null) as string | null
+          if (meta) return meta
+          // Fallback: look up by stripe_customer_id.
+          if (typeof sub.customer === 'string') {
+            const { data } = await adminClient
+              .from('users')
+              .select('id')
+              .eq('stripe_customer_id', sub.customer)
+              .single()
+            return data?.id ?? null
+          }
+          return null
+        }
+
+        // Helper: apply plan state to a user row.
+        async function setUserPlan(
+          userId: string,
+          sub: Stripe.Subscription,
+          plan: 'free' | 'pro'
+        ) {
+          const periodEnd = (sub as any).current_period_end
+            ? new Date((sub as any).current_period_end * 1000).toISOString()
+            : null
+          await adminClient
+            .from('users')
+            .update({
+              plan,
+              plan_expires_at: plan === 'pro' ? periodEnd : null,
+              stripe_subscription_id: sub.id,
+            })
+            .eq('id', userId)
+        }
+
+        try {
+          switch (event.type) {
+            case 'checkout.session.completed': {
+              const session = event.data.object as Stripe.Checkout.Session
+              if (session.subscription) {
+                const sub = await stripe.subscriptions.retrieve(
+                  typeof session.subscription === 'string'
+                    ? session.subscription
+                    : session.subscription.id
+                )
+                const userId = session.metadata?.supabase_user_id
+                  ?? session.client_reference_id
+                  ?? await getUserIdFromSub(sub)
+                if (userId) {
+                  await setUserPlan(userId, sub, 'pro')
+                }
+              }
+              break
+            }
+            case 'customer.subscription.updated':
+            case 'customer.subscription.created': {
+              const sub = event.data.object as Stripe.Subscription
+              const userId = await getUserIdFromSub(sub)
+              if (userId) {
+                const plan = ['active', 'trialing'].includes(sub.status) ? 'pro' : 'free'
+                await setUserPlan(userId, sub, plan)
+              }
+              break
+            }
+            case 'customer.subscription.deleted': {
+              const sub = event.data.object as Stripe.Subscription
+              const userId = await getUserIdFromSub(sub)
+              if (userId) {
+                await setUserPlan(userId, sub, 'free')
+              }
+              break
+            }
+            default:
+              // Ignore unhandled event types — Stripe sends many.
+              break
+          }
+        } catch (err) {
+          console.error(`Webhook handler error for ${event.type}:`, err)
+          return new Response('Webhook handler error', { status: 500 })
+        }
+
+        return new Response('ok', { status: 200 })
+      })
+      ```
+
+      ## File 3: Add a deno test for the webhook
+
+      Create `supabase/functions/stripe-webhook/webhook.test.ts` that:
+      - Imports the webhook handler (you may need to refactor the handler into a named function to be testable)
+      - Tests 3 cases:
+        1. `checkout.session.completed` with `subscription.id` and `metadata.supabase_user_id` → calls `setUserPlan(userId, sub, 'pro')`
+        2. `customer.subscription.deleted` → calls `setUserPlan(userId, sub, 'free')`
+        3. Unknown event type → no DB call, returns 200
+
+      Use the same Deno test pattern as `effectiveAmount.test.ts`. Mock the Stripe + Supabase clients.
+
+      If the test is too complex to mock cleanly, just do a syntax check + verify the handler is exported and the function shape is right. Document the test approach in deliverable.md.
+
+      ## Static checks (run from repo root, capture output in deliverable.md)
+
+      ```bash
+      ls -la supabase/functions/create-checkout/index.ts supabase/functions/stripe-webhook/index.ts
+      wc -l supabase/functions/create-checkout/index.ts supabase/functions/stripe-webhook/index.ts
+      echo "---deno check (if available)---"
+      which deno && deno check supabase/functions/create-checkout/index.ts && deno check supabase/functions/stripe-webhook/index.ts
+      echo "---deno test---"
+      cd supabase/functions/stripe-webhook && deno test --allow-all 2>&1 | head -10
+      ```
+
+      Both files exist with content. If deno is installed, both type-check and the test passes (or at least the file parses). If deno is not installed, document it in deliverable.md.
+
+      Do NOT touch: existing send-reminders function, plan.ts, migrations, index.html.
+      Commit message: `feat(v1.0): stripe checkout + webhook edge functions (test mode)`
+    assigned_to: coder
+    verified_by: verifier
+    verify_prompt: |
+      Branch: `codex/v1.0-week-1`. Verify the Stripe edge functions:
+
+      1. **`supabase/functions/create-checkout/index.ts`** exists, has the expected structure:
+         - CORS headers (`Access-Control-Allow-Origin: *`)
+         - Bearer auth check (line ~30)
+         - `getUser()` from `userClient.auth.getUser()` to validate the caller
+         - Reads `STRIPE_PRICE_MONTHLY` and `STRIPE_PRICE_YEARLY` from env
+         - Reads `STRIPE_SECRET_KEY` from env
+         - Creates a Stripe Checkout Session with `mode: 'subscription'`, `client_reference_id: user.id`, `success_url` and `cancel_url`
+         - Returns `{ url: session.url }` as JSON
+         - Has idempotent customer creation (reuses existing `stripe_customer_id`)
+
+      2. **`supabase/functions/stripe-webhook/index.ts`** exists, has the expected structure:
+         - Reads `STRIPE_WEBHOOK_SECRET` from env
+         - Verifies the webhook signature with `stripe.webhooks.constructEventAsync` (raw body, signature header, secret)
+         - Handles 3 event types: `checkout.session.completed`, `customer.subscription.updated/created`, `customer.subscription.deleted`
+         - Maps event to `setUserPlan(userId, sub, 'free' | 'pro')` based on sub.status
+         - Returns 200 for unhandled event types
+         - Uses SUPABASE_SERVICE_ROLE_KEY for admin access
+
+      3. **`supabase/functions/stripe-webhook/webhook.test.ts`** exists with at least 1 Deno test case. Tests can be partial (some may be `Deno.test.todo` with a comment about what to test) — the deliverable is the test file structure, not a green test suite.
+
+      4. **Type-checking**: try `deno check` on both files. If deno is not installed, skip this check (note in verifier report).
+
+      5. **No regressions in send-reminders**: `git diff origin/main -- supabase/functions/send-reminders/` should be empty (existing function untouched).
+
+      6. **Secret management**: no hardcoded keys in the code. All `STRIPE_*` values come from `Deno.env.get()`. Grep for `sk_test_` or `sk_live_` in the new files — should be zero matches.
+
+      FAIL with exact line numbers if any check fails.
+    timeout_ms: 1800000
+
+  - id: settings-upgrade-flow
+    title: 'Settings: Pro upgrade flow + plan state display + customer portal link'
+    depends_on: [visual-redesign]
+    prompt: |
+      Read the PRD at `docs/v1.0-prd.md` §11 task 5. The visual track has already added the paywall modal UI. Your job is to wire the upgrade flow to the create-checkout edge function.
+
+      Branch: `codex/v1.0-week-1`. The visual track will have committed the paywall modal — read `index.html` to see the current state of the Settings section and the paywall modal.
+
+      ## Change 1: Add Settings → "Account & Plan" section
+
+      In the Settings screen (around line 850+ in `index.html`), add a new settings section AFTER the existing "Cloud Sync" section. Title: "💎 Plan". Contents:
+
+      - Read-only display: "Current plan: Free" (or "Pro · renews [date]" if Pro)
+      - If Free: a single button "Upgrade to Pro" that opens the paywall modal
+      - If Pro: a button "Manage subscription" that opens `https://billing.stripe.com/p/login/test_xxx` (will be replaced with the real portal link in production)
+      - If Pro: a small text "Cancel anytime from the customer portal. Pro includes unlimited subscriptions, multi-device sync, and full analytics."
+
+      Style matches the existing settings section pattern.
+
+      ## Change 2: Wire the "Upgrade to Pro" button
+
+      In the paywall modal (added by the visual track), the "Upgrade to Pro" button should now call a new function `upgradeToPro(plan)`. The function:
+
+      1. Gets the current session: `var session = await supabaseClient.auth.getSession(); var token = session.data.session?.access_token;`
+      2. POSTs to `${SUPABASE_URL}/functions/v1/create-checkout` with `Authorization: Bearer ${token}` and body `{"plan": "monthly"}` (or "yearly" based on which card the user clicked — add a plan selector parameter to the button click handler)
+      3. Parses `{ url: ... }` and `window.location.href = url` to redirect to Stripe
+      4. On error, toast "Could not start checkout: [error]"
+
+      ## Change 3: Wire the post-checkout return
+
+      When the user returns from Stripe (URL has `?upgrade=success` or `?upgrade=cancel`), the app should:
+      - On success: toast "🎉 Welcome to Pro! Your plan will activate in a moment." Then call `loadSubscriptions()` to refresh.
+      - On cancel: toast "Checkout cancelled."
+      - Both handled in `initAuth()` or a new `handleCheckoutReturn()` function called at app startup.
+
+      Also poll the `users` table once after returning (Realtime subscription on the row, or just a one-time `supabaseClient.from('users').select('plan').eq('id', currentUser.id).single()` after a 2s delay) to refresh the displayed plan state.
+
+      ## Change 4: Add `getCurrentPlan()` helper
+
+      A small function that reads `currentUser.plan` (assuming we'll cache it on the user object, or fetches from `users` table). Use it to render the Settings display.
+
+      If `currentUser` doesn't have a `plan` field, fetch it: `var { data } = await supabaseClient.from('users').select('plan, plan_expires_at').eq('id', currentUser.id).single(); if (data) currentUser.plan = data.plan;`
+
+      Cache the result so the Settings screen doesn't re-fetch on every render.
+
+      ## Change 5: Display the user's plan in the sidebar / nav
+
+      In the top nav (added by visual track), if the user is Pro, show a small "PRO" badge next to the brand mark. If Free, no badge. Inline JS check on `currentUser.plan === 'pro'`.
+
+      ## Static checks (run from repo root, capture output in deliverable.md)
+
+      ```bash
+      node -e "
+      const fs = require('fs');
+      const html = fs.readFileSync('index.html', 'utf8');
+      const checks = {
+        'Plan section exists': /Account\s*&\s*Plan|💎\s*Plan/.test(html),
+        'upgradeToPro function': html.includes('function upgradeToPro'),
+        'create-checkout call': html.includes('functions/v1/create-checkout'),
+        'checkout return handler': /upgrade=(success|cancel)/.test(html),
+        'PRO badge': /PRO/.test(html),
+        'getCurrentPlan helper': html.includes('function getCurrentPlan') || html.includes('async function getCurrentPlan') || html.includes('getCurrentPlan ='),
+        'onclick count >= 90': (html.match(/onclick=/g) || []).length >= 90
+      };
+      Object.entries(checks).forEach(([k,v]) => console.log((v?'OK ':'FAIL ')+k));
+      process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
+      "
+      ```
+
+      All 7 must pass.
+
+      Do NOT touch: supabase files, migrations, edge functions.
+      Do NOT modify the visual track's CSS — it should be in place already.
+      Commit message: `feat(v1.0): wire Pro upgrade flow in Settings`
+    assigned_to: coder
+    verified_by: verifier
+    verify_prompt: |
+      Branch: `codex/v1.0-week-1`. Verify the Settings upgrade flow in `index.html`:
+
+      1. **Plan section** (Change 1): read the Settings screen, find a new "Account & Plan" or "💎 Plan" section. Confirm it has a "Current plan: Free/Pro" display, an "Upgrade to Pro" button (Free) or "Manage subscription" button (Pro), and the cancellation text. Style matches existing settings sections.
+
+      2. **upgradeToPro function** (Change 2): confirm a function `upgradeToPro(plan)` exists, gets the session bearer token, POSTs to `${SUPABASE_URL}/functions/v1/create-checkout` with `Authorization: Bearer` and JSON body `{"plan": "monthly" | "yearly"}`, parses `{ url }`, and calls `window.location.href = url`. On error, shows a toast.
+
+      3. **Plan selector** (Change 2): confirm the "Upgrade to Pro" button in the paywall modal calls `upgradeToPro('monthly')` or `upgradeToPro('yearly')` based on which card was clicked — NOT a single `upgradeToPro()` with no argument.
+
+      4. **Checkout return handler** (Change 3): confirm `handleCheckoutReturn()` or equivalent reads `URLSearchParams` for `?upgrade=success` or `?upgrade=cancel` and shows the right toast. Called at app startup (in `initAuth` or equivalent). Confirmed by `grep "upgrade=" index.html`.
+
+      5. **getCurrentPlan helper** (Change 4): confirm a function exists that fetches `users.plan` and `users.plan_expires_at` for the current user and caches the result.
+
+      6. **PRO badge in nav** (Change 5): confirm a "PRO" badge appears in the top nav for Pro users, hidden for Free. Check the JS that toggles visibility based on `currentUser.plan === 'pro'`.
+
+      7. **No regressions**: `esc()` function byte-identical, 88+ inline onclick handlers, file size delta < 200 lines (this is mostly JS additions, not CSS).
+
+      FAIL with exact line numbers if any check fails.
+    timeout_ms: 1500000
+
+  - id: marketing-site-redirect
+    title: 'Marketing landing page at / + move app to /app'
+    depends_on: [visual-redesign]
+    prompt: |
+      Read the PRD at `docs/v1.0-prd.md` §7. Read the existing `index.html` (the app) to understand the current structure.
+
+      Branch: `codex/v1.0-week-1`. The visual track has already added the topnav. Your job is to create the marketing landing page at the root URL and move the app to `/app`.
+
+      ## Change 1: Move current app to `/app`
+
+      The current `index.html` becomes the app. To make it accessible at `/app`:
+      - Move `index.html` content to `app.html` (rename the file content)
+      - Create a new `index.html` for the marketing landing
+      - OR keep `index.html` as the app and create `marketing.html`, then use Vercel rewrites to serve marketing at `/` and app at `/app`
+
+      The simplest approach: create `vercel.json` with rewrites. But this is a static-only Vercel project (no server). Vercel supports `cleanUrls` and `rewrites` for static. Use the second approach: keep `index.html` as the app at `/app`, create `marketing/index.html` for the marketing page, and use `vercel.json` rewrites:
+
+      Actually, the cleanest approach is:
+      1. Create `marketing/index.html` — the new marketing landing
+      2. Create `vercel.json` with:
+         ```json
+         {
+           "rewrites": [
+             { "source": "/app", "destination": "/index.html" },
+             { "source": "/", "destination": "/marketing/index.html" }
+           ]
+         }
+         ```
+      3. Existing bookmarks to `subkit-ten.vercel.app/` will land on the marketing page (good)
+      4. The app is now at `subkit-ten.vercel.app/app` (existing users with deep links break — but we have very few of those)
+
+      For local dev: `python3 -m http.server` serves files literally, so `index.html` is at `/` and `app.html` is at `/app.html`. Add a JS redirect at the top of the current `index.html`: if the URL is `index.html` and we're at `/`, redirect to `/app.html`. NO — that would break the production Vercel setup. Instead:
+      - Rename current `index.html` → `app.html`
+      - Create new `index.html` → marketing landing
+      - Add `vercel.json` rewrites
+      - This way: prod = Vercel handles via rewrites. Local = you serve the dir with `python3 -m http.server` and visit `index.html` (marketing) or `app.html` (app) directly.
+
+      **DECISION:** rename current `index.html` to `app.html` and create a new `index.html` for marketing. This is the simplest. Update `sw.js` cache list to include `app.html`.
+
+      ## Change 2: Build the marketing landing page
+
+      `index.html` (the new one) should be a clean marketing page with:
+      - Top nav (matches the app's topnav style, simplified): brand + "Features" + "Pricing" + "FAQ" + "Get the app" CTA button
+      - Hero: phone mockup image (use a screenshot from the app — or for now, a CSS-drawn placeholder showing the v1.0 dark theme dashboard) + headline "Your subscriptions, one number you can trust" + subheadline "Track in 5 seconds. Real reminders. Multi-device sync. No bank linking." + CTA buttons "Get the app" and "Try the web app" (link to /app.html)
+      - Features: 3-column grid of value props (Track in 5 seconds / Reminders that work / Sync across devices) — copy from `docs/v1.0-prd.md` §7.3
+      - Pricing: 2 cards (Free $0 / Pro $4.99/mo or $39/yr) — copy from §7.4
+      - FAQ: 6 questions from §7.5, with your own answers
+      - Footer: small print, "© 2026 Chai Saengnual · [Privacy](#) · [Terms](#)"
+
+      Style: matches the app's v1.0 dark+minimax visual language. Outfit font. Cyan accent.
+
+      Use the same CSS custom properties as the app so a future DESIGN.md lint passes both files. (Don't run the lint — just match the values.)
+
+      ## Change 3: Service worker update
+
+      `sw.js` currently caches `['/', '/index.html', '/icon.svg', '/manifest.json']`. Add `/app.html` to the SHELL array. Bump cache name from `subkit-v3` to `subkit-v4` to bust the cache.
+
+      ## Change 4: Vercel config
+
+      Create `vercel.json` at repo root:
+
+      ```json
+      {
+        "rewrites": [
+          { "source": "/", "destination": "/index.html" },
+          { "source": "/app", "destination": "/app.html" }
+        ]
+      }
+      ```
+
+      ## Static checks (run from repo root, capture output in deliverable.md)
+
+      ```bash
+      ls -la index.html app.html marketing/index.html vercel.json sw.js 2>&1
+      echo "---sw.js has /app.html---"
+      grep -c "/app.html" sw.js
+      echo "---vercel.json valid---"
+      cat vercel.json | python3 -m json.tool > /dev/null && echo OK || echo FAIL
+      echo "---index.html is marketing (has 'Get the app' CTA)---"
+      grep -c "Get the app" index.html
+      echo "---app.html still has the app (has 'topnav')---"
+      grep -c "topnav" app.html
+      ```
+
+      All checks should pass.
+
+      Do NOT touch: supabase files, edge functions, the visual track's CSS, the settings upgrade flow.
+      Commit message: `feat(v1.0): marketing landing at /, app moved to /app`
+    assigned_to: coder
+    verified_by: verifier
+    verify_prompt: |
+      Branch: `codex/v1.0-week-1`. Verify the marketing site structure:
+
+      1. **Files exist** (Change 1): `index.html`, `app.html`, `marketing/index.html`, `vercel.json` all exist. `index.html` is the marketing page (smaller, < 500 lines). `app.html` is the original app (larger, ~3000 lines).
+
+      2. **Marketing page content** (Change 2): confirm `index.html` contains:
+         - Hero with "Your subscriptions, one number you can trust"
+         - Subheadline: "Track in 5 seconds. Real reminders. Multi-device sync. No bank linking."
+         - At least one "Get the app" CTA button
+         - 3 features: track in 5 seconds, reminders, sync
+         - Pricing section with Free and Pro
+         - FAQ section with at least 4 questions
+         - Top nav matching the app's style (brand + nav items + "Get the app" CTA)
+         - Outfit font loaded
+         - Dark theme
+
+      3. **App moved correctly** (Change 1): confirm `app.html` still has the topnav, the supabase client, the auth flow, all 88+ onclick handlers. The 600 lines of new v1.0 CSS are present. File size > 2000 lines.
+
+      4. **Service worker** (Change 3): confirm `sw.js` has `app.html` in the SHELL array and the cache name is bumped (e.g. `subkit-v4` not `subkit-v3`).
+
+      5. **Vercel config** (Change 4): confirm `vercel.json` exists, is valid JSON, has the two rewrites (`/` → `/index.html` and `/app` → `/app.html`).
+
+      6. **Browser test** of the marketing site: render `index.html` in headless Chrome (`chrome-headless-shell` at the same path as before). Confirm no console errors, hero + features + pricing + FAQ all visible. Save screenshot to `/tmp/marketing.png`.
+
+      FAIL with exact line numbers if any check fails.
+    timeout_ms: 1500000
+
+  - id: integration-smoke-v1
+    title: 'integration smoke: load v1.0 app + marketing site, verify no regressions'
+    prompt: |
+      This is the gate task. Runs after all 4 producer tracks finish and pass verification.
+
+      Branch: `codex/v1.0-week-1`. Verify the assembled changes work together.
+
+      ## Step 1: Branch state
+
+      From repo root:
+      ```bash
+      git log --oneline origin/main..HEAD
+      git diff --stat origin/main..HEAD
+      ```
+
+      You should see commits from all 4 producer tracks touching: `index.html` (visual + settings), `app.html` (moved from index.html), `marketing/index.html` (new), `vercel.json` (new), `sw.js` (cache bump), `supabase/migrations/20260615210000_*.sql` and `20260615220000_*.sql` (new), `supabase/functions/_shared/plan.ts` (new), `supabase/functions/create-checkout/index.ts` (new), `supabase/functions/stripe-webhook/index.ts` (new).
+
+      If any expected file is missing, FAIL with the missing file path.
+
+      ## Step 2: Browser test the app
+
+      Use the headless shell at `/Users/chalermpolsaengnual/Library/Caches/ms-playwright/chromium_headless_shell-1223/chrome-headless-shell-mac-arm64/chrome-headless-shell` with `--headless=new --no-sandbox --window-size=1440,900 --screenshot=/tmp/v1-app.png` against `file:///Users/chalermpolsaengnual/Library/CloudStorage/OneDrive-Personal/01-CHAI_WORKSPACE/01-CHAI PROJECTS/Dev-Projects/Project-Subkit/app.html`. Save screenshot.
+
+      Visually inspect: topnav visible, no sidebar, dark theme, card grid on Tracked Items, paywall modal exists. Zero console errors.
+
+      ## Step 3: Browser test the marketing site
+
+      Same headless shell, screenshot to `/tmp/v1-marketing.png`. Confirm: hero renders, 3 features, pricing cards, FAQ, dark theme, Outfit font, no sidebar.
+
+      ## Step 4: Adversarial test — the 5-sub trigger
+
+      This can't be tested without a live Supabase connection, but verify the trigger SQL parses:
+      ```bash
+      psql --version 2>&1 || echo "psql not available, skipping live test"
+      # If psql available:
+      # psql -c '\set ON_ERROR_STOP on' -f supabase/migrations/20260615220000_free_tier_limit.sql postgres://throwaway 2>&1 | head -20
+      ```
+
+      If psql is not available, just confirm the SQL is well-formed by reading it carefully: PL/pgSQL function with `DECLARE` block, raises exception with `errcode = 'P0001'`, trigger is BEFORE INSERT.
+
+      ## Step 5: Confirm the upgrade flow JS wires up
+
+      Read `app.html`. Confirm:
+      - `upgradeToPro` function exists and POSTs to `functions/v1/create-checkout`
+      - The paywall modal has 2 buttons (Continue with Free + Upgrade to Pro)
+      - The "Upgrade to Pro" button in the modal calls `upgradeToPro('monthly')` or `upgradeToPro('yearly')` based on a plan parameter
+      - Settings has the new "💎 Plan" section
+
+      ## Step 6: Write the smoke report
+
+      Write `docs/v1.0-week-1/smoke-report.md` with:
+      - PASS/FAIL per step
+      - Screenshot references (`/tmp/v1-app.png` and `/tmp/v1-marketing.png`)
+      - Any console messages
+      - Summary: "Week 1 ready. Visual redesign + paywall + Stripe edge functions + marketing site all integrate. 4 of 4 tracks PASS."
+
+      If anything fails, write the report as a FAIL with the exact issue, and the orchestrator will route a fix.
+    assigned_to: verifier
+    role: verify-as-task
+    depends_on: [visual-redesign, users-table-and-paywall-trigger, stripe-edge-functions, settings-upgrade-flow, marketing-site-redirect]
+    timeout_ms: 1800000

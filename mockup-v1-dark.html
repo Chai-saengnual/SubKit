@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubKit v1.0 — dark + minimax polish</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  /* dark — default */
+  --bg: #0a0a0f;
+  --surface: #13131a;
+  --surface-2: #1c1c26;
+  --surface-3: #22222e;
+  --text: #f0f0f5;
+  --text-secondary: #b4b4c0;
+  --muted: #8e8ea8;
+  --muted-2: #5a5a70;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.10);
+  --primary: #4dd8e8;            /* cyan, the only interaction color */
+  --primary-dim: rgba(77, 216, 232, 0.12);
+  --primary-glow: rgba(77, 216, 232, 0.25);
+  --danger: #ff5f7a;
+  --warn: #ffa64d;
+  --green: #4ddc9a;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-pill: 32px;
+  /* soft shadows tuned for dark backgrounds — barely there, no halo */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.3);
+  --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+}
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-body); font-weight: 400; -webkit-font-smoothing: antialiased; }
+
+/* SHELL */
+.shell { display: flex; height: 100vh; overflow: hidden; }
+
+/* TOP NAV — minimax-style frosted bar */
+.topnav {
+  position: fixed; top: 0; left: 0; right: 0; height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border-bottom: 1px solid var(--border);
+  z-index: 10;
+}
+.topnav-left { display: flex; align-items: center; gap: 32px; }
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 600; font-size: 17px; color: var(--text);
+  letter-spacing: -0.01em;
+}
+.brand-mark {
+  width: 28px; height: 28px;
+  background: var(--primary);
+  color: var(--bg);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+  box-shadow: 0 0 0 1px rgba(77, 216, 232, 0.4), 0 0 12px var(--primary-glow);
+}
+.nav { display: flex; align-items: center; gap: 2px; }
+.nav-item {
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  font-size: 14px; font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.nav-item:hover { color: var(--text); background: var(--surface-2); }
+.nav-item.active {
+  color: var(--primary);
+  background: var(--primary-dim);
+}
+.topnav-right { display: flex; align-items: center; gap: 8px; }
+.btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-body);
+  font-size: 14px; font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-secondary { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
+.btn-secondary:hover { border-color: var(--primary); color: var(--primary); }
+.btn-primary { background: var(--primary); color: var(--bg); }
+.btn-primary:hover { box-shadow: 0 0 0 3px var(--primary-glow); }
+
+/* MAIN */
+.main {
+  margin-top: 64px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 40px 64px;
+}
+
+/* PAGE HEADER */
+.page-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 24px;
+}
+.page-title {
+  font-size: 30px; font-weight: 600; letter-spacing: -0.02em; color: var(--text);
+  display: flex; align-items: center; gap: 12px;
+}
+.page-title .greeting-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary-glow);
+}
+.page-sub { font-size: 14px; color: var(--muted); margin-top: 4px; }
+
+/* HERO STAT CARDS */
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 22px 22px 20px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+.stat-card.hero {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+  border-color: var(--border-strong);
+}
+.stat-card.hero::after {
+  content: ''; position: absolute;
+  right: -60px; top: -60px;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--primary-dim) 0%, transparent 70%);
+  pointer-events: none;
+}
+.stat-label {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.stat-value {
+  font-size: 34px; font-weight: 600; color: var(--text);
+  margin-top: 10px; letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+.stat-value.lg { font-size: 42px; }
+.stat-value.accent { color: var(--primary); }
+.stat-meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.stat-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  font-size: 11px; font-weight: 500; color: var(--text-secondary);
+  margin-top: 14px;
+}
+.stat-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+.stat-pill.warn .dot { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+.stat-pill.danger .dot { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+/* TWO-COLUMN */
+.cols { display: grid; grid-template-columns: 1.55fr 1fr; gap: 20px; }
+
+/* PANEL */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+}
+.panel + .panel { margin-top: 16px; }
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 18px;
+}
+.panel-title { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+.panel-link { font-size: 13px; color: var(--primary); cursor: pointer; }
+.panel-link:hover { text-decoration: underline; }
+
+/* CARD GRID for subscriptions */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.sub-card {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+.sub-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(77, 216, 232, 0.3);
+}
+.sub-card-icon {
+  width: 40px; height: 40px;
+  background: var(--surface-2);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  margin-bottom: 12px;
+}
+.sub-card-name {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 6px;
+}
+.sub-card-cat { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.sub-card-price {
+  font-size: 18px; font-weight: 600; color: var(--text);
+  margin-top: 12px; letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.sub-card-cycle { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.sub-card-badge {
+  position: absolute; top: 14px; right: 14px;
+  color: var(--bg);
+  font-size: 10px; font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.sub-card-badge.danger { background: var(--danger); }
+.sub-card-badge.warn { background: var(--warn); color: var(--bg); }
+.sub-card-badge.ok { background: var(--green); }
+
+/* RENEWAL LIST (right column) */
+.renewal-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.renewal-item:last-child { border-bottom: none; }
+.renewal-icon {
+  width: 36px; height: 36px;
+  background: var(--surface-2);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.renewal-info { flex: 1; min-width: 0; }
+.renewal-name { font-size: 13px; font-weight: 500; color: var(--text); }
+.renewal-when { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.renewal-amount {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* BAR CHART */
+.bar-row {
+  display: grid; grid-template-columns: 110px 1fr 60px;
+  align-items: center; gap: 12px;
+  padding: 7px 0;
+}
+.bar-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+.bar-track { height: 6px; background: var(--surface-2); border-radius: var(--radius-pill); overflow: hidden; }
+.bar-fill { height: 100%; background: var(--primary); border-radius: var(--radius-pill); transition: width 0.6s ease; }
+.bar-val {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- TOP NAV -->
+  <nav class="topnav">
+    <div class="topnav-left">
+      <div class="brand">
+        <div class="brand-mark">⚡</div>
+        SubKit
+      </div>
+      <div class="nav">
+        <div class="nav-item active">Dashboard</div>
+        <div class="nav-item">Items</div>
+        <div class="nav-item">Calendar</div>
+        <div class="nav-item">Analytics</div>
+        <div class="nav-item">Reminders</div>
+        <div class="nav-item">Settings</div>
+      </div>
+    </div>
+    <div class="topnav-right">
+      <button class="btn btn-secondary">Export</button>
+      <button class="btn btn-primary">+ Add Item</button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- PAGE HEADER -->
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">
+          <span class="greeting-dot"></span>
+          Dashboard
+        </h1>
+        <p class="page-sub">12 active items · 3 due in the next 7 days</p>
+      </div>
+    </div>
+
+    <!-- HERO STATS -->
+    <div class="hero-grid">
+
+      <div class="stat-card hero">
+        <div class="stat-label">Monthly Total</div>
+        <div class="stat-value lg">$184.50</div>
+        <div class="stat-meta">≈ 5,840 THB · 27,460 JPY</div>
+        <div class="stat-pill">
+          <span class="dot"></span> Rates fresh · cached 12 min ago
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Subscriptions</div>
+        <div class="stat-value">9</div>
+        <div class="stat-meta">8 active · 1 paused</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Bills</div>
+        <div class="stat-value accent">$42.00</div>
+        <div class="stat-meta">3 utilities tracked</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-label">Annual</div>
+        <div class="stat-value">$2,214</div>
+        <div class="stat-meta">At current run rate</div>
+      </div>
+
+    </div>
+
+    <!-- TWO-COLUMN BODY -->
+    <div class="cols">
+
+      <!-- LEFT: card grid -->
+      <div>
+        <div class="panel-head">
+          <h2 class="panel-title">Tracked Items</h2>
+          <a class="panel-link">View all →</a>
+        </div>
+        <div class="card-grid">
+
+          <div class="sub-card">
+            <div class="sub-card-icon">📺</div>
+            <div class="sub-card-name">Netflix</div>
+            <div class="sub-card-cat">Entertainment</div>
+            <div class="sub-card-price">$15.49</div>
+            <div class="sub-card-cycle">per month</div>
+            <div class="sub-card-badge danger">3 days</div>
+          </div>
+
+          <div class="sub-card">
+            <div class="sub-card-icon">🎵</div>
+            <div class="sub-card-name">Spotify</div>
+            <div class="sub-card-cat">Entertainment</div>
+            <div class="sub-card-price">$9.99</div>
+            <div class="sub-card-cycle">per month</div>
+            <div class="sub-card-badge warn">7 days</div>
+          </div>
+
+          <div class="sub-card">
+            <div class="sub-card-icon">🤖</div>
+            <div class="sub-card-name">ChatGPT Plus</div>
+            <div class="sub-card-cat">AI Tools</div>
+            <div class="sub-card-price">$20.00</div>
+            <div class="sub-card-cycle">per month</div>
+            <div class="sub-card-badge ok">12 days</div>
+          </div>
+
+          <div class="sub-card">
+            <div class="sub-card-icon">☁️</div>
+            <div class="sub-card-name">iCloud+ 200GB</div>
+            <div class="sub-card-cat">Productivity</div>
+            <div class="sub-card-price">$2.99</div>
+            <div class="sub-card-cycle">per month</div>
+            <div class="sub-card-badge ok">19 days</div>
+          </div>
+
+          <div class="sub-card">
+            <div class="sub-card-icon">⚡</div>
+            <div class="sub-card-name">Electric Bill</div>
+            <div class="sub-card-cat">Electric Bill · variable</div>
+            <div class="sub-card-price">$78.50</div>
+            <div class="sub-card-cycle">latest bill</div>
+            <div class="sub-card-badge warn">5 days</div>
+          </div>
+
+          <div class="sub-card">
+            <div class="sub-card-icon">💧</div>
+            <div class="sub-card-name">Water Bill</div>
+            <div class="sub-card-cat">Water Bill</div>
+            <div class="sub-card-price">฿320</div>
+            <div class="sub-card-cycle">per month</div>
+            <div class="sub-card-badge ok">15 days</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- RIGHT: stack -->
+      <div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Up Next</h2>
+            <a class="panel-link">Reminders →</a>
+          </div>
+
+          <div class="renewal-item">
+            <div class="renewal-icon">📺</div>
+            <div class="renewal-info">
+              <div class="renewal-name">Netflix</div>
+              <div class="renewal-when">in 3 days · Jun 18</div>
+            </div>
+            <div class="renewal-amount">$15.49</div>
+          </div>
+
+          <div class="renewal-item">
+            <div class="renewal-icon">⚡</div>
+            <div class="renewal-info">
+              <div class="renewal-name">Electric Bill</div>
+              <div class="renewal-when">in 5 days · Jun 20</div>
+            </div>
+            <div class="renewal-amount">$78.50</div>
+          </div>
+
+          <div class="renewal-item">
+            <div class="renewal-icon">🎵</div>
+            <div class="renewal-info">
+              <div class="renewal-name">Spotify</div>
+              <div class="renewal-when">in 7 days · Jun 22</div>
+            </div>
+            <div class="renewal-amount">$9.99</div>
+          </div>
+
+          <div class="renewal-item">
+            <div class="renewal-icon">🤖</div>
+            <div class="renewal-info">
+              <div class="renewal-name">ChatGPT Plus</div>
+              <div class="renewal-when">in 12 days · Jun 27</div>
+            </div>
+            <div class="renewal-amount">$20.00</div>
+          </div>
+
+          <div class="renewal-item">
+            <div class="renewal-icon">💧</div>
+            <div class="renewal-info">
+              <div class="renewal-name">Water Bill</div>
+              <div class="renewal-when">in 15 days · Jun 30</div>
+            </div>
+            <div class="renewal-amount">฿320</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">By Category</h2>
+            <a class="panel-link">All →</a>
+          </div>
+
+          <div class="bar-row">
+            <div class="bar-label">Entertainment</div>
+            <div class="bar-track"><div class="bar-fill" style="width: 14%"></div></div>
+            <div class="bar-val">$25.48</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">AI Tools</div>
+            <div class="bar-track"><div class="bar-fill" style="width: 11%"></div></div>
+            <div class="bar-val">$20.00</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Productivity</div>
+            <div class="bar-track"><div class="bar-fill" style="width: 8%"></div></div>
+            <div class="bar-val">$14.97</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Electric Bill</div>
+            <div class="bar-track"><div class="bar-fill" style="width: 43%"></div></div>
+            <div class="bar-val">$78.50</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Water Bill</div>
+            <div class="bar-track"><div class="bar-fill" style="width: 16%"></div></div>
+            <div class="bar-val">$9.14</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">Other</div>
+            <div class="bar-track"><div class="bar-fill" style="width: 8%"></div></div>
+            <div class="bar-val">$15.41</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+</div>
+
+</body>
+</html>
