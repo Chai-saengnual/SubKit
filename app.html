@@ -442,6 +442,35 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .modal-actions { display: flex; gap: 10px; }
 .modal-actions .btn-primary, .modal-actions .btn-secondary, .modal-actions .btn-danger { flex: 1; margin-top: 0; }
 
+/* ONBOARDING MODAL */
+.onb-dots { display: flex; justify-content: center; gap: 8px; margin: -6px 0 18px; }
+.onb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted2); transition: background 0.2s, transform 0.2s; }
+.onb-dot.onb-dot-active { background: var(--cyan); transform: scale(1.25); }
+.onb-eyebrow { font-size: 11px; color: var(--cyan); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 8px; }
+.onb-h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 8px; }
+.onb-sub { font-size: 13px; color: var(--muted); line-height: 1.55; margin: 0 0 18px; }
+.onb-hint { font-size: 11px; color: var(--muted); margin: 4px 0 0; text-align: center; }
+.onb-actions { display: flex; gap: 10px; margin-top: 20px; }
+.onb-actions .btn-primary, .onb-actions .btn-secondary { flex: 1; margin-top: 0; }
+.onb-currency-list { max-height: 320px; overflow-y: auto; scrollbar-width: none; }
+.onb-currency-list::-webkit-scrollbar { display: none; }
+.onb-currency-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--surface2); border: 2px solid transparent; border-radius: var(--radius-sm); margin-bottom: 8px; cursor: pointer; transition: border-color 0.15s; }
+.onb-currency-item:hover { border-color: var(--muted2); }
+.onb-currency-item.is-selected { border-color: var(--cyan); background: var(--cyan-dim, rgba(77,216,232,0.12)); }
+.onb-currency-item-left { display: flex; align-items: center; gap: 12px; }
+.onb-currency-item-flag { font-size: 22px; }
+.onb-currency-item-code { font-size: 14px; font-weight: 600; }
+.onb-currency-item-name { font-size: 12px; color: var(--muted); }
+.onb-currency-item-rate { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.onb-currency-item-right { display: flex; align-items: center; gap: 8px; }
+.onb-currency-item-symbol { font-family: 'Space Mono', monospace; font-size: 16px; font-weight: 700; color: var(--cyan); }
+.onb-currency-item-check { color: var(--cyan); font-size: 16px; }
+.onb-bullet-row { display: grid; gap: 10px; margin-bottom: 4px; }
+.onb-bullet { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface2); border-radius: var(--radius-sm); border: 1px solid var(--muted2); }
+.onb-bullet-dot { font-size: 22px; flex-shrink: 0; }
+.onb-bullet-title { font-size: 14px; font-weight: 600; }
+.onb-bullet-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
 /* DETAIL MODAL */
 .detail-hero-row { display: flex; align-items: center; gap: 16px; padding: 4px 0 20px; border-bottom: 1px solid var(--muted2); margin-bottom: 20px; }
 .detail-big-icon { width: 64px; height: 64px; border-radius: 16px; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 32px; flex-shrink: 0; }
@@ -1469,6 +1498,82 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
 </div>
 
 <!-- PAYWALL MODAL (v1.0 — UI only, trigger logic + Stripe land in parallel tracks) -->
+<!-- ONBOARDING MODAL -->
+<div class="modal-overlay" id="onboarding-modal" onclick="closeOnboarding(event)">
+  <div class="modal-box" style="max-width:520px">
+    <div class="modal-title">Welcome to SubKit <button class="modal-close" onclick="skipOnboarding()">✕</button></div>
+
+    <!-- progress dots -->
+    <div class="onb-dots" id="onb-dots">
+      <span class="onb-dot onb-dot-active" data-step="1"></span>
+      <span class="onb-dot" data-step="2"></span>
+      <span class="onb-dot" data-step="3"></span>
+    </div>
+
+    <!-- STEP 1: pick currency -->
+    <div class="onb-step onb-step-1">
+      <div class="onb-eyebrow">Step 1 of 3</div>
+      <h2 class="onb-h2">Pick your display currency</h2>
+      <p class="onb-sub">All prices get shown in this currency. You can change it any time from Settings.</p>
+      <div id="onb-currency-list" class="onb-currency-list"></div>
+      <div class="onb-actions">
+        <button class="btn-primary" onclick="onbNext()">Continue</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: add first subscription -->
+    <div class="onb-step onb-step-2" style="display:none">
+      <div class="onb-eyebrow">Step 2 of 3</div>
+      <h2 class="onb-h2">Add your first subscription</h2>
+      <p class="onb-sub">Just the basics — name, price, how often it bills, and the next renewal date.</p>
+      <div class="form-group">
+        <label class="form-label">Name</label>
+        <input class="form-input" type="text" id="onb-sub-name" placeholder="Netflix, Spotify, Electric Bill..." />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Price</label>
+        <input class="form-input" type="number" id="onb-sub-price" placeholder="9.99" step="0.01" min="0" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Billing Cycle</label>
+          <select class="form-select" id="onb-sub-cycle">
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="yearly">Yearly</option>
+            <option value="weekly">Weekly</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Next Renewal</label>
+          <input class="form-input" type="date" id="onb-sub-date" />
+        </div>
+      </div>
+      <p class="onb-hint">Saved locally on this device. You can always edit or add more later.</p>
+      <div class="onb-actions">
+        <button class="btn-secondary" onclick="onbPrev()">Back</button>
+        <button class="btn-primary" onclick="onboardingAddSub()">Add &amp; continue</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: optional reminders -->
+    <div class="onb-step onb-step-3" style="display:none">
+      <div class="onb-eyebrow">Step 3 of 3</div>
+      <h2 class="onb-h2">Never miss a renewal</h2>
+      <p class="onb-sub">Connect an email or Telegram reminder to get pinged before any item bills. Takes about 30 seconds, and you can do it later from Settings.</p>
+      <div class="onb-bullet-row">
+        <div class="onb-bullet"><span class="onb-bullet-dot">📧</span><div><div class="onb-bullet-title">Email reminders</div><div class="onb-bullet-sub">Via EmailJS — works with any inbox</div></div></div>
+        <div class="onb-bullet"><span class="onb-bullet-dot">💬</span><div><div class="onb-bullet-title">Telegram bot</div><div class="onb-bullet-sub">Get a direct message on your phone</div></div></div>
+        <div class="onb-bullet"><span class="onb-bullet-dot">☁️</span><div><div class="onb-bullet-title">Cloud sync</div><div class="onb-bullet-sub">Access your data on any device</div></div></div>
+      </div>
+      <div class="onb-actions">
+        <button class="btn-secondary" onclick="skipOnboarding()">Set up later</button>
+        <button class="btn-primary" onclick="finishOnboardingToReminders()">Configure now</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="paywall-modal" onclick="closeModal(event,'paywall-modal')">
   <div class="modal-box" style="max-width:560px">
     <div class="modal-title">Unlock unlimited tracking <button class="modal-close" onclick="document.getElementById('paywall-modal').classList.remove('open')">✕</button></div>
@@ -1526,6 +1631,8 @@ var supabaseClient = (window.supabase && window.supabase.createClient)
 
 var subs = [];
 var currentUser = null;
+var onboardingStep = 0;  // 0 = not started; 1/2/3 = current step in onboarding flow
+var realtimeChannel = null;
 var currentPlanCache = null;
 var isAppLoading = false;
 var subsSearch = '';
@@ -3186,6 +3293,67 @@ async function openCustomerPortal(){
     toast('Could not open customer portal: ' + (e.message || e), 'error');
   }
 }
+async function startRealtimeSync(){
+  // Pro-only multi-device sync. Subscribes to the user's subscription rows
+  // so changes from another device propagate within ~1s. Free users keep
+  // localStorage-only behavior.
+  if(!currentUser || !supabaseClient) return;
+  try {
+    var plan = await getCurrentPlan();
+    if(plan.plan !== 'pro') return;  // Free users: no realtime
+  } catch (e) {
+    return;  // Fail closed: if plan lookup errors, do not subscribe
+  }
+
+  // Tear down any previous channel before starting a new one
+  if(realtimeChannel){
+    try { realtimeChannel.unsubscribe(); } catch (e) {}
+    realtimeChannel = null;
+  }
+
+  realtimeChannel = supabaseClient
+    .channel('user-subs-' + currentUser.id)
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'subscriptions', filter: 'user_id=eq.' + currentUser.id },
+      function(payload){
+        // payload.eventType: INSERT | UPDATE | DELETE
+        // payload.new / payload.old
+        handleRealtimeEvent(payload);
+      })
+    .subscribe();
+}
+
+function handleRealtimeEvent(payload){
+  if(!payload) return;
+  try {
+    if(payload.eventType === 'DELETE'){
+      var oldId = payload.old && payload.old.id;
+      if(oldId){
+        subs = subs.filter(function(s){ return s.id !== oldId; });
+      }
+    } else if(payload.new){
+      var row = payload.new;
+      var idx = subs.findIndex(function(s){ return s.id === row.id; });
+      var normalized = normalizeSub(row);
+      if(idx >= 0) subs[idx] = normalized;
+      else subs.push(normalized);
+    }
+    renderAll();
+    renderCalendar();
+    toast('Synced from another device', 'info');
+  } catch (e) {
+    // Swallow handler errors so a malformed payload doesn't break the channel
+    console.error('Realtime handler error:', e);
+  }
+}
+
+function stopRealtimeSync(){
+  if(realtimeChannel){
+    try { realtimeChannel.unsubscribe(); } catch (e) {}
+    realtimeChannel = null;
+  }
+}
+
 async function getCurrentPlan(){
   if(!currentUser || !supabaseClient) return { plan: 'free', plan_expires_at: null };
   var cached = currentPlanCache;
@@ -3249,6 +3417,9 @@ async function handleCheckoutReturn(){
       if(state.plan === 'pro') break;
     }
     await renderPlanSection();
+    // Plan just flipped to Pro — start the realtime channel now so multi-
+    // device sync kicks in without a page refresh.
+    startRealtimeSync();
   } else if(upgrade === 'cancel'){
     toast('Checkout cancelled — no charge made', 'info');
   } else if(portal === 'return'){
@@ -3380,6 +3551,7 @@ async function sendPasswordReset(){
   }
 }
 async function signOut(){
+  stopRealtimeSync();
   var result = await supabaseClient.auth.signOut();
   if(result.error){
     setAuthFeedback(result.error.message, 'error');
@@ -3406,12 +3578,17 @@ async function initAuth(){
     setLoadingState(true, currentUser ? 'Syncing your account' : 'Returning to local mode', currentUser ? 'Loading your cloud subscriptions.' : 'Switching back to subscriptions saved on this device.');
     renderAuthState();
     renderPlanSection();
+    // (Re)start the realtime channel for the active user. startRealtimeSync
+    // is a no-op for signed-out / free-tier users and re-creates the channel
+    // on user-switch / plan-upgrade events.
+    startRealtimeSync();
     Promise.resolve()
       .then(function(){ return loadSubscriptions(); })
       .catch(function(){ toast('Could not refresh subscriptions', 'error'); })
       .finally(function(){ setLoadingState(false); });
   });
-  renderPlanSection();
+  await renderPlanSection();
+  startRealtimeSync();
 }
 
 if(EJS.serviceId) document.getElementById('ejs-service').value = EJS.serviceId;
