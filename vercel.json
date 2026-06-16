@@ -4,6 +4,18 @@
     { "source": "/app", "destination": "/app.html" },
     { "source": "/privacy", "destination": "/legal/privacy.html" },
     { "source": "/terms", "destination": "/legal/terms.html" },
-    { "source": "/changelog", "destination": "/legal/changelog.html" }
+    { "source": "/changelog", "destination": "/legal/changelog.html" },
+    { "source": "/.well-known/assetlinks.json", "destination": "/.well-known/assetlinks.json" },
+    { "source": "/.well-known/apple-app-site-association", "destination": "/.well-known/apple-app-site-association" }
+  ],
+  "headers": [
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [{ "key": "Content-Type", "value": "application/json" }]
+    },
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [{ "key": "Content-Type", "value": "application/json" }]
+    }
   ]
 }

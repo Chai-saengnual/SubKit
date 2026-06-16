@@ -1,0 +1,466 @@
+version: 1
+plan:
+  name: 'SubKit remediation 2026-06 — fix review findings'
+  max_concurrency: 3
+  max_consecutive_failures: 2
+  max_cycles: 6
+  auto_reject_retries: 1
+  verifier_config:
+    default_verifiers: [verifier]
+    audit_sample_rate: 0.0
+tasks:
+  - id: readme-and-secrets-doc
+    title: 'write a real README.md + document the secrets model'
+    prompt: |
+      Read REVIEW.md (at repo root) §9 and §10 first to understand the context. Then write a proper README.md at the repo root.
+
+      The current README.md is 8 bytes — literally "# subkit". Replace it.
+
+      Required sections (in this order):
+      1. Title + 2-3 line description
+      2. Features (bullet list — cover subscriptions, bills, cloud sync, reminders, invoices, PWA)
+      3. "Quick start" — how a new user goes from clone to running app
+      4. Architecture overview (1 short paragraph + simple ASCII diagram showing: Browser → Supabase Postgres/Storage, Browser → EmailJS, Browser → Telegram, Supabase Edge Function → EmailJS)
+      5. "Configuration" section: how to set up Supabase, EmailJS, Telegram. Include a clear warning about the secrets model.
+      6. "Development" — how to run locally, how to add a migration, how to deploy
+      7. "Security model" — short paragraph. Cover: publishable key is intentionally public (Supabase's new model), RLS is the gatekeeper, Telegram bot token in localStorage is a known trade-off, EmailJS public key is by design client-side.
+      8. "Roadmap" — note that v1.0 will refactor index.html into modules (REVIEW.md §6), and list 2-3 other things planned
+      9. License — MIT, with a one-line copyright
+
+      Style: conversational, no marketing speak. The owner is a solo dev, so write it like a maintainer would for themselves + a future contributor. Match the project's tone (subtle, technical, no emojis in body text — emojis only in the Features bullet list as they appear in the app).
+
+      Critical content for "Security model" section — these are user-facing warnings:
+      - "Telegram bot token and EmailJS service IDs are stored in browser localStorage. Don't use this app on a device you don't trust."
+      - "The Supabase publishable key (sb_publishable_...) is intentionally embedded — Supabase designed it that way. RLS is the real access control."
+
+      Do NOT:
+      - Do not invent features that don't exist
+      - Do not include a screenshot (the repo has no images directory)
+      - Do not write "Contributing" section — solo project
+      - Do not use emoji except in Features bullets
+
+      Commit on branch `codex/remediation-2026-06` (create it from `origin/main` if it doesn't exist). Do NOT push. Report the commit hash in deliverable.md.
+    assigned_to: coder
+    verified_by: verifier
+    verify_prompt: |
+      Independently verify the README.md at the repo root on branch `codex/remediation-2026-06`:
+
+      1. Render the markdown mentally / with `cat` and check that:
+         - All 9 required sections are present in order
+         - The "Security model" section contains BOTH the Telegram/EmailJS localStorage warning AND the publishable-key-is-public explanation
+         - The Quick start has actual commands the user can run
+         - No fabricated features (cross-check against REVIEW.md §2 architecture list)
+      2. `git show` the commit and verify the diff is ONLY the README.md file (or README.md + LICENSE if you added it)
+      3. Check no broken markdown: unclosed code blocks, mismatched brackets, broken links
+      4. Check word count: should be 200-500 words, not 50 or 5000
+
+      FAIL if any check fails. Cite the exact line.
+    timeout_ms: 1500000
+
+  - id: index-html-hardening
+    title: 'index.html hardening — CSP, Telegram HTML escape, defensive load, stale-rates indicator'
+    prompt: |
+      Read REVIEW.md §3, §7, §8 carefully before making changes. Also read the shared design doc at docs/remediation-2026-06/design.md.
+
+      All changes go in `index.html` (145 KB, 2854 lines). Make all FOUR changes in a single commit (or 2-3 logical commits, your call). The file is big, so use grep/read to locate exact lines.
+
+      Branch: `codex/remediation-2026-06`, base it on `origin/main`.
+
+      ## Change 1: Content-Security-Policy meta tag (REVIEW.md item 2)
+
+      Add immediately after the existing `<meta name="theme-color"...>` line (around line 8-9 in index.html):
+
+      ```html
+      <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline' 'unsafe-eval'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://hncffbdvniedxfkawjhl.supabase.co https://*.supabase.co wss://*.supabase.co https://api.emailjs.com https://api.telegram.org https://open.er-api.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self';">
+      ```
+
+      Note: `'unsafe-eval'` is needed because the existing service worker init and a few other places use Function constructors indirectly via libraries. `'unsafe-inline'` is needed for the 88 inline `onclick` handlers and the theme bootstrap script. This is a defense-in-depth meta, not a strict CSP. The user knows this trade-off.
+
+      After adding, open index.html in a real browser (or use playwright via `mavis mcp call playwright navigate ...` — but if MCP is not available, use a static check: `node -e "const fs=require('fs'); const html=fs.readFileSync('index.html','utf8'); if(!html.includes('Content-Security-Policy')) process.exit(1); console.log('CSP found')"`) and verify the meta tag is in place.
+
+      ## Change 2: Escape HTML in tgMsg for Telegram (REVIEW.md item 3)
+
+      The `tgMsg(sub)` function at index.html:2196-2211 builds an HTML body for Telegram's `parse_mode: 'HTML'`. Telegram parses `<`, `>`, `&` as markup. A subscription named `<script>alert(1)</script>` will break the message (Telegram will accept it but render the markup incorrectly, possibly stripping content).
+
+      Add a `tgEsc` helper near the existing `esc()` at line 1273:
+
+      ```javascript
+      function tgEsc(value){
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+      ```
+
+      Then in `tgMsg` (line 2201-2210), wrap the user-controlled values with `tgEsc()`:
+      - `sub.emoji` — emoji is a string of emoji chars, but pass through tgEsc anyway (zero risk, defense in depth)
+      - `sub.name` — user-typed name, MUST escape
+      - `days` (when interpolated) — it's a number from `dL(sub)`, low risk but escape for consistency
+      - `dateStr` — from `toLocaleDateString`, no user input, no escape needed
+      - `sub.account` — user-typed, MUST escape
+      - `sub.priceNote` — user-typed, MUST escape
+
+      Don't escape the static labels ("⚡ SubKit Reminder", "Renews in", etc.) — those are literals.
+
+      After the change, verify with: `node -e "const fs=require('fs'); const html=fs.readFileSync('index.html','utf8'); if(!html.includes('tgEsc')) process.exit(1); console.log('tgEsc found')"`.
+
+      ## Change 3: await window.supabase defensive load (REVIEW.md item 8)
+
+      The current code at line 1175 does:
+      ```js
+      var supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+      ```
+
+      This is at script execution time, but the CDN script for `@supabase/supabase-js@2` (line 17) is loaded synchronously above it, so the race is theoretical. Still, make it defensive: wrap in a tiny check.
+
+      Change line 1175 to:
+      ```javascript
+      var supabaseClient = (window.supabase && window.supabase.createClient)
+        ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+        : null;
+      ```
+
+      Then in `initAuth()` (around line 2797), if `supabaseClient` is null, show a toast and bail. Existing call sites already throw if supabaseClient methods are called on null, so this is belt-and-suspenders, but explicit is better.
+
+      Also: if `initAuth` is the one that uses the client, the rest of the code paths that use `supabaseClient` are all called AFTER initAuth resolves (they're event handlers). So a null check at the top of initAuth is sufficient.
+
+      Add at the very top of `initAuth` (line 2797):
+      ```javascript
+      if(!supabaseClient){
+        toast('Supabase failed to load. Check your network and refresh.', 'error');
+        setLoadingState(false);
+        return;
+      }
+      ```
+
+      ## Change 4: Stale-rates footer indicator (REVIEW.md item 4)
+
+      `fetchRates()` at line 1433-1451 silently swallows errors with `.catch(function(){})`. If the API is down, the UI shows stale or no rates with no signal.
+
+      Add a tiny indicator. The function currently stores rates + timestamp in localStorage. Add a third localStorage key `subkit-rates-status` that is one of: `'fresh' | 'cached' | 'failed' | 'stale'`.
+
+      Modify `fetchRates` to set the status:
+      - On successful fetch (line 1442-1448): set `'subkit-rates-status' = 'fresh'`
+      - On error (line 1450): set `'subkit-rates-status' = 'failed'`
+      - On load (line 1436-1438 when cache hit and within 1h): set `'subkit-rates-status' = 'cached'`
+      - If cache is older than 24h: set `'subkit-rates-status' = 'stale'`
+
+      Then in the home screen, find the rate pill (it's `<span id="rate-pill" ...>` around line 646). Add a small dot indicator or text modifier when status is not 'fresh'. Use a small colored dot in front of the existing pill:
+      - 'fresh' → no indicator
+      - 'cached' → muted dot (var(--muted))
+      - 'stale' → orange dot (var(--warn)) + tooltip "Rates may be outdated"
+      - 'failed' → red dot (var(--danger)) + tooltip "Couldn't fetch latest rates"
+
+      Implementation hint: a function `renderRateStatus()` that runs from `renderHome()` and from after `fetchRates` resolves. It updates the pill's text and adds a leading dot span.
+
+      Do NOT redesign the pill — just add a leading dot or text suffix. Keep the existing '💱 USD (1 USD ≈ X)' format.
+
+      ## After all 4 changes
+
+      Run these static checks and capture the output in deliverable.md:
+      ```bash
+      node -e "const fs=require('fs'); const html=fs.readFileSync('index.html','utf8');
+      const checks = {
+        'CSP meta': html.includes('Content-Security-Policy'),
+        'tgEsc helper': html.includes('function tgEsc'),
+        'tgMsg uses tgEsc': /tgEsc\(sub\.name\)/.test(html),
+        'supabase null check': /supabaseClient\s*=\s*\(window\.supabase/.test(html),
+        'initAuth null guard': /!supabaseClient[\s\S]{0,200}toast\(['\"]Supabase failed/.test(html),
+        'rates-status logic': html.includes('subkit-rates-status')
+      };
+      Object.entries(checks).forEach(([k,v]) => console.log((v?'OK ':'FAIL ')+k));
+      process.exit(Object.values(checks).every(Boolean) ? 0 : 1);"
+      ```
+
+      All 6 must show OK.
+
+      Also: visually grep the file to confirm you didn't break the 88 inline `onclick=` handlers (they should still be there as-is) and the `esc()` function is unchanged.
+
+      Do NOT modernize the file. Match the existing `var`, no-semicolon, 2-space-indent style.
+    assigned_to: coder
+    verified_by: verifier
+    verify_prompt: |
+      Branch: `codex/remediation-2026-06`. Verify the 4 changes in index.html:
+
+      1. **CSP meta tag exists** (item 2). Check it's between line 5-20 of index.html. The content must reference connect-src with the Supabase, EmailJS, Telegram, and open.er-api.com hosts.
+
+      2. **Telegram HTML escape works** (item 3). Independently write a test that simulates tgMsg with sub.name = '<img src=x onerror=alert(1)>' and verifies the output does NOT contain a raw `<img` tag. Run it via:
+         ```bash
+         node -e "
+         const fs = require('fs');
+         const html = fs.readFileSync('index.html', 'utf8');
+         // extract tgMsg function source
+         const match = html.match(/function tgMsg\(sub\)\{[\s\S]*?\n\}/);
+         if (!match) { console.log('FAIL: tgMsg not found'); process.exit(1); }
+         // eval the helper
+         const tgEsc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+         // build the message like tgMsg would
+         const sub = { name: '<img src=x onerror=alert(1)>', emoji: '⚡', nextDate: '2026-12-01', currency: 'USD', cycle: 'monthly', priceMode: 'fixed', price: 10, account: '<b>hack</b>', priceNote: '<' };
+         // crude reconstruction: we expect tgEsc wrappers around the user fields
+         const out = match[0];
+         const usesTgEsc = out.includes('tgEsc(sub.name)') && out.includes('tgEsc(sub.account)') && out.includes('tgEsc(sub.priceNote)');
+         console.log('tgEsc used on user fields:', usesTgEsc);
+         process.exit(usesTgEsc ? 0 : 1);
+         "
+         ```
+         All three user fields must be wrapped.
+
+      3. **Supabase null check** (item 8). Confirm the new pattern `var supabaseClient = (window.supabase && ...)` exists, AND `initAuth` has a top-of-function null guard that toasts and returns.
+
+      4. **Stale rates indicator** (item 4). Confirm `subkit-rates-status` localStorage key is set in fetchRates's 4 paths (fresh, cached, stale, failed) AND the rate pill in the home screen is updated based on the status. Read the home screen rendering code and confirm a status-dependent visual change exists.
+
+      5. **No regressions.** Confirm:
+         - 88 `onclick=` handlers still present (run `grep -c "onclick=" index.html` — should be 88)
+         - `esc()` function unchanged
+         - No code outside the 4 specified changes (i.e., no drive-by edits)
+         - Total line count delta < 50 lines (these are small additions)
+
+      6. **Open the file in a real browser via playwright MCP** (if available — `mavis mcp call playwright navigate file://.../index.html` and screenshot the home screen). Confirm:
+         - Home screen renders without console errors
+         - Rate pill is visible
+         - No CSP violation errors in console (warnings about unsafe-inline are expected)
+
+      FAIL with exact line numbers if any check fails. PASS only if all 6 are green.
+    timeout_ms: 1800000
+
+  - id: edge-function-hardening
+    title: 'send-reminders edge function hardening + tests + race-safe migration'
+    prompt: |
+      Read REVIEW.md §5 (the edge function section) carefully. Also read the shared design doc at docs/remediation-2026-06/design.md.
+
+      Three changes:
+
+      ## Change 1: Bounded-concurrency loop (REVIEW.md item 5)
+
+      `supabase/functions/send-reminders/index.ts` line 75-126 has a sequential `for (const sub of subs ?? [])` loop that awaits one EmailJS call at a time. With `reminder_days = 14` and many subs, this is slow.
+
+      Replace the loop with bounded-concurrency (max 5 in flight). Use this pattern:
+
+      ```typescript
+      const CONCURRENCY = 5
+      const queue = (subs ?? []).slice()
+      const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+        while (queue.length) {
+          const sub = queue.shift()
+          if (!sub) break
+          await processOne(sub)  // see below
+        }
+      })
+      await Promise.allSettled(workers)
+      ```
+
+      Move the body of the current `for` loop into an async function `processOne(sub)` so it's reusable. `Promise.allSettled` means one failure doesn't kill the rest — you already track `failed.push(...)` inside.
+
+      Keep the existing behavior: skip if reminded today, update `last_remind` on success, push to `sent`/`failed`.
+
+      ## Change 2: New SQL migration for race-safe last_remind (REVIEW.md item 6)
+
+      Two simultaneous triggers of the edge function can both pass the "not reminded today" check and both send. Add a unique partial index to prevent it. The race window is microseconds, but for free, do it.
+
+      Create new file `supabase/migrations/20260615090000_unique_reminder_per_day.sql`:
+
+      ```sql
+      -- Prevent two edge function invocations from sending the same reminder
+      -- on the same day. The (id, last_remind) tuple is unique; once written,
+      -- a concurrent UPDATE that would set the same value will fail with 23505.
+      -- The edge function already handles errors per-row, so a single conflict
+      -- does not abort the batch.
+      create unique index if not exists subscriptions_id_last_remind_uidx
+        on public.subscriptions (id, last_remind)
+        where last_remind is not null;
+      ```
+
+      Do not wrap the existing 130-line edge function in a transaction. The index alone is enough.
+
+      ## Change 3: Unit tests with Deno (REVIEW.md item 10, partial)
+
+      The edge function is in TypeScript that runs on Deno. The pure helper `effectiveAmount` and the date math (`daysLeft` calculation) are the most testable parts.
+
+      Create `supabase/functions/send-reminders/effectiveAmount.test.ts` with at least 6 cases for `effectiveAmount`:
+
+      - fixed mode, no actual_price → returns base price
+      - actual mode, actual_price set → returns actual_price
+      - variable mode, actual_price set → returns actual_price
+      - actual mode, actual_price null → returns base price (fallback)
+      - negative actual_price (shouldn't happen, but defensive) → returns base
+      - NaN actual_price (e.g., from string input) → returns base
+      - price=0, actual_price=0 → returns 0
+      - fixed mode with non-numeric price → returns 0 (defensive)
+
+      Test framework: use `Deno.test`. The function lives in `index.ts`. Since `effectiveAmount` is a private function in `index.ts`, you have two options:
+      a) Export `effectiveAmount` and import it in the test file
+      b) Inline the function in the test file (less ideal — duplicates the logic)
+
+      Use option (a): add `export` to the `effectiveAmount` arrow function in `index.ts`. Confirm the function is still self-contained (it doesn't touch any module-level state).
+
+      Run the tests with:
+      ```bash
+      cd supabase/functions/send-reminders
+      deno test --allow-all
+      ```
+
+      If `deno` is not installed, document the install step but do NOT install it without asking. Note in deliverable.md: "Tests written but not run locally because deno is not installed on this machine. To run: `curl -fsSL https://deno.land/install.sh | sh && deno test --allow-all`"
+
+      ## After all 3 changes
+
+      Static checks (run from repo root):
+      ```bash
+      # 1. index.ts still has the export
+      grep -n "export const effectiveAmount" supabase/functions/send-reminders/index.ts
+      # 2. migration file exists
+      ls -la supabase/migrations/20260615090000_*.sql
+      # 3. test file exists
+      ls -la supabase/functions/send-reminders/effectiveAmount.test.ts
+      ```
+
+      Branch: `codex/remediation-2026-06`, based on `origin/main`. Do NOT push.
+
+      Commit each change separately so the diff is easy to review.
+    assigned_to: coder
+    verified_by: verifier
+    verify_prompt: |
+      Branch: `codex/remediation-2026-06`. Verify the 3 changes:
+
+      1. **Bounded-concurrency loop** (item 5). Read `supabase/functions/send-reminders/index.ts`. Confirm:
+         - The old sequential `for (const sub of subs ?? [])` is GONE
+         - A new bounded-concurrency pattern (CONCURRENCY constant, worker pool, Promise.allSettled) is in place
+         - The per-sub processing body is extracted into a `processOne(sub)` or similar function
+         - Behavior preserved: `sent` and `failed` arrays still populated correctly, `last_remind` updated on success, "skip if already reminded today" logic intact
+         - Try/catch still wraps the EmailJS call
+
+         Re-derive correctness: imagine `subs` has 20 items and the first 5 all throw EmailJS errors. The remaining 15 should still process. The original code did this (each iteration is independent), the new code MUST also.
+
+      2. **Race-safe migration** (item 6). Read `supabase/migrations/20260615090000_unique_reminder_per_day.sql`. Confirm:
+         - The filename follows the timestamp pattern (YYYYMMDDhhmmss)
+         - It creates a unique index on `(id, last_remind)` with `where last_remind is not null` (partial index — important: don't apply uniqueness to rows that haven't been reminded yet)
+         - The SQL is idempotent (`if not exists`)
+         - No destructive operations
+
+         Run `psql --version` to check if postgres CLI exists. If yes, do a syntax check:
+         `psql -c '\set ON_ERROR_STOP on' -f supabase/migrations/20260615090000_unique_reminder_per_day.sql postgres://localhost/throwaway 2>&1 | head -20`
+         (Expected: error because no DB connection, but if there's a syntax error in the SQL you'll see it before the connection error. Adjust the test if needed.)
+         If `psql` not available, just confirm the SQL parses by reading it carefully and checking the index expression is valid PostgreSQL.
+
+      3. **Unit tests** (item 10, partial). Read `supabase/functions/send-reminders/effectiveAmount.test.ts`. Confirm:
+         - At least 6 distinct test cases for `effectiveAmount`
+         - Each case has a clear assertion (not just `assert(true)`)
+         - Uses `Deno.test`
+         - Imports `effectiveAmount` from `./index.ts` (verify the index.ts file actually exports it now)
+
+         Try running them: `cd supabase/functions/send-reminders && deno test --allow-all 2>&1 | head -40`. If deno is not installed, document this in the verifier report — it's not a fail condition, the test FILE is the deliverable.
+
+      4. **No regressions in edge function**. Confirm:
+         - The Deno import at top is unchanged
+         - The CORS headers are unchanged
+         - The auth check (line 13-16) is unchanged
+         - The required-fields validation (line 34-36) is unchanged
+         - The response shape (sent, failed, total) is unchanged
+
+      FAIL with exact line numbers if any check fails.
+    timeout_ms: 1800000
+
+  - id: final-integration-smoke
+    title: 'final integration smoke — load the modified app and verify no regressions'
+    prompt: |
+      This is the gate task. It runs after all three implementation tracks (`readme-and-secrets-doc`, `index-html-hardening`, `edge-function-hardening`) finish and pass verification.
+
+      Independently verify the assembled changes work together:
+
+      ## Step 1: Verify the branch state
+
+      From the repo root on branch `codex/remediation-2026-06`:
+      ```bash
+      git log --oneline origin/main..HEAD
+      git diff --stat origin/main..HEAD
+      ```
+
+      You should see commits from all 3 producer tasks touching: README.md, index.html, supabase/functions/send-reminders/index.ts, supabase/migrations/20260615090000_*, supabase/functions/send-reminders/effectiveAmount.test.ts.
+
+      If any expected file is missing, FAIL with the missing file path.
+
+      ## Step 2: Open the app in a real browser via playwright
+
+      Use the playwright MCP:
+      ```bash
+      mavis mcp call playwright navigate '{"url": "file:///Users/chalermpolsaengnual/Library/CloudStorage/OneDrive-Personal/01-CHAI_WORKSPACE/01-CHAI PROJECTS/Dev-Projects/Project-Subkit/index.html"}'
+      ```
+
+      Then take a screenshot:
+      ```bash
+      mavis mcp call playwright screenshot '{"fullPage": true}'
+      ```
+
+      Save the screenshot to `docs/remediation-2026-06/smoke-home.png`.
+
+      Then check the console for errors:
+      ```bash
+      mavis mcp call playwright console_messages '{}'
+      ```
+
+      FAIL if:
+      - Any console error (warnings are OK, but not errors)
+      - CSP violation errors specifically
+      - "supabase is not defined" or "createClient is not a function" type errors
+
+      ## Step 3: Exercise core flows
+
+      In the playwright session:
+      - Click "Tracked Items" in the nav — verify the subs list screen renders (it'll be empty, but it should render the empty state)
+      - Click "Calendar" — verify the calendar grid renders
+      - Click "Reminders" — verify the reminder config status shows
+      - Click "Settings" — verify the settings sections render, scroll through to confirm theme buttons, font picker, currency selector, cloud sync, EmailJS section, Telegram section all visible
+      - Click "Sign In with GitHub" — should redirect to GitHub OAuth. This will navigate away from the local file. After verifying the button is clickable and the redirect starts, navigate back to the local file.
+
+      Save 4 screenshots: smoke-home.png, smoke-list.png, smoke-calendar.png, smoke-settings.png. (Re-navigate to the file each time since the GitHub OAuth click will leave the local origin.)
+
+      ## Step 4: Verify Telegram HTML escaping works in a real call
+
+      Open the playwright page, then in the page context, run this JS via `mavis mcp call playwright evaluate '{"expression": "..."}'`:
+
+      ```javascript
+      // Simulate the tgEsc function inline (it's defined in the file but not on window)
+      const tgEsc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      // Simulate calling tgMsg with a malicious name
+      const malicious = { name: '<img src=x onerror=alert(1)>', emoji: '⚡', nextDate: '2026-12-01', currency: 'USD', cycle: 'monthly', priceMode: 'fixed', price: 10, account: '<b>hack</b>', priceNote: '<' };
+      // Read tgMsg and tgEsc from the page's global scope (they're in the script block, not on window, so this is tricky)
+      ```
+
+      Alternative: just verify the file contains the `tgEsc` function and the `tgMsg` function uses it. Read index.html with Read tool and grep:
+      - `function tgEsc(` exists
+      - `tgEsc(sub.name)` appears in tgMsg
+      - `tgEsc(sub.account)` appears in tgMsg
+      - `tgEsc(sub.priceNote)` appears in tgMsg
+
+      FAIL if any are missing.
+
+      ## Step 5: Verify README is correct
+
+      Read `README.md`. Confirm:
+      - It's at least 50 lines (not the 1-line original)
+      - Contains the "Security model" section with the localStorage warning
+      - Contains a working "Quick start" with real commands
+      - Mentions the Supabase project (or refers to configuration without leaking secrets)
+
+      ## Step 6: Verify migration is well-formed
+
+      Read `supabase/migrations/20260615090000_unique_reminder_per_day.sql`. Confirm:
+      - Creates the unique index as specified
+      - Filename timestamp is later than all existing migration files
+
+      ## Deliverable
+
+      Write `docs/remediation-2026-06/smoke-report.md` with:
+      - PASS/FAIL per step
+      - Screenshot references
+      - Any console messages captured
+      - Summary: "All 3 producer tracks integrate cleanly. App loads without console errors. Core flows render. Telegram HTML escape present. README is real. Migration is well-formed."
+
+      Embed the 4 screenshots in the report.
+
+      If anything fails, write the report as a FAIL with the exact issue, and the orchestrator will route a fix.
+    assigned_to: verifier
+    role: verify-as-task
+    depends_on: [readme-and-secrets-doc, index-html-hardening, edge-function-hardening]
+    timeout_ms: 1800000
+

@@ -1,0 +1,25 @@
+{
+  "name": "subkit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SubKit — manual subscription tracker. PWA + Capacitor (iOS) + Bubblewrap (Android TWA).",
+  "scripts": {
+    "dev": "vercel dev",
+    "build:icons": "node scripts/build-icons.mjs",
+    "ios:sync": "cap sync ios",
+    "ios:open": "cap open ios",
+    "ios:build": "cap sync ios && cd ios/App && pod install && xcodebuild -workspace App.xcworkspace -scheme App -configuration Release -sdk iphoneos -derivedDataPath build",
+    "android:init": "bubblewrap init --manifest https://subkit-ten.vercel.app/manifest.json",
+    "android:build": "bubblewrap build",
+    "android:install": "bubblewrap install"
+  },
+  "dependencies": {
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
+    "@bubblewrap/cli": "^1.19.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
