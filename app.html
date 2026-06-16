@@ -1605,6 +1605,32 @@ SubKit uses <strong style="color:var(--text)">EmailJS</strong> to send renewal r
   </div>
 </div>
 
+<!-- CONFLICT MODAL (v1.0 — multi-device sync: shown when a guarded save detects a fresher server row) -->
+<div class="modal-overlay" id="conflict-modal" onclick="closeModal(event,'conflict-modal')">
+  <div class="modal-box" style="max-width:680px">
+    <div class="modal-title">Sync conflict <button class="modal-close" onclick="document.getElementById('conflict-modal').classList.remove('open')">✕</button></div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.5">Another device saved a newer version of this item. Pick which version to keep — your unsaved changes are below on the left.</p>
+
+    <div id="conflict-modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+      <div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--cyan);font-weight:700;margin-bottom:8px">Your changes</div>
+        <div id="conflict-mine" class="conflict-col" style="background:var(--surface2);border:1px solid var(--muted2);border-radius:var(--radius-sm);padding:12px;font-size:13px;line-height:1.55"></div>
+      </div>
+      <div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--warn);font-weight:700;margin-bottom:8px">Server version</div>
+        <div id="conflict-server" class="conflict-col" style="background:var(--surface2);border:1px solid var(--muted2);border-radius:var(--radius-sm);padding:12px;font-size:13px;line-height:1.55"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn-secondary" style="flex:1;min-width:120px" onclick="closeConflictModal()">Cancel</button>
+      <button class="btn-secondary" style="flex:1;min-width:120px" onclick="useServerVersion()">Use server</button>
+      <button class="btn-primary" style="flex:1;min-width:120px" id="conflict-keep-mine-btn" onclick="keepMyVersion()">Keep mine</button>
+    </div>
+    <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px;line-height:1.5" id="conflict-modal-meta"></p>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 <div class="loading-shell" id="loading-shell">
@@ -1875,7 +1901,10 @@ function normalizeSub(row){
     category: row.category || 'Other',
     emoji: row.emoji || '📺',
     account: row.account || '',
-    _lastRemind: row.last_remind || row._lastRemind || null
+    _lastRemind: row.last_remind || row._lastRemind || null,
+    // Server-side wall clock of the last accepted write. Used by the
+    // conflict modal + the load-time "server has updates" check.
+    _clientUpdatedAt: row.client_updated_at || row.updated_at || null
   };
 }
 function toDbPayload(sub){
@@ -1891,7 +1920,11 @@ function toDbPayload(sub){
     category: sub.category || 'Other',
     emoji: sub.emoji || '📺',
     account: sub.account || null,
-    last_remind: sub._lastRemind || null
+    last_remind: sub._lastRemind || null,
+    // Stamp client wall clock so the server can guard against an older
+    // local edit overwriting a fresher one from another device. Re-uses
+    // an in-memory value if we've already stamped this edit this session.
+    client_updated_at: sub._clientUpdatedAt || new Date().toISOString()
   };
 }
 function fetchRates(){
@@ -2121,6 +2154,14 @@ async function loadSubscriptions(){
   applySubsViewMode();
   renderCalendar();
   renderImportBanner();
+  // Freshness check: if we just pulled cloud data and the local cache
+  // (any localStorage draft or pre-sync snapshot) has older
+  // client_updated_at values for matching items, surface a toast so the
+  // user can open the conflict modal. We compare against loadLocalSubs()
+  // (the un-synced draft) — once syncLocalDraftToCloud() runs the draft
+  // is replaced with server state, so any remaining staleness belongs
+  // to a multi-device race we want to flag.
+  if(currentUser && typeof _checkSyncFreshness === 'function') _checkSyncFreshness();
 }
 
 function switchTab(tab, btn){
@@ -2598,8 +2639,27 @@ async function saveSub(){
   try {
     if(currentUser){
       if(editId){
-        var updated = await supabaseClient.from('subscriptions').update(toDbPayload(payload)).eq('id', editId).select('*').single();
+        // Guarded update: only write if the server's client_updated_at is
+        // older than ours. If another device wrote a fresher value, the
+        // guard returns 0 rows and we open the conflict modal so the user
+        // picks a side instead of silently overwriting.
+        var editPayload = toDbPayload(payload);
+        var updated = await supabaseClient.from('subscriptions')
+          .update(editPayload)
+          .eq('id', editId)
+          .lt('client_updated_at', editPayload.client_updated_at)
+          .select('*')
+          .single();
         if(updated.error) throw updated.error;
+        if(!updated.data){
+          // Guard rejected — server is newer. Fetch the current row and
+          // hand off to the conflict modal. Bail without closing the edit
+          // form so the user can decide.
+          var fresherRes = await supabaseClient.from('subscriptions').select('*').eq('id', editId).single();
+          if(fresherRes.error) throw fresherRes.error;
+          openConflictModal(editId, payload, fresherRes.data);
+          return;
+        }
         subs = subs.map(function(sub){ return sub.id===editId ? normalizeSub(updated.data) : sub; });
       } else {
         var inserted = await supabaseClient.from('subscriptions').insert(Object.assign({ user_id: currentUser.id }, toDbPayload(payload))).select('*').single();
@@ -3223,6 +3283,196 @@ function openPaywall(){
 function closePaywall(){
   document.getElementById('paywall-modal').classList.remove('open');
 }
+
+/* v1.0 conflict modal — multi-device sync. Shown when a guarded save
+ * detects the server has a fresher client_updated_at than the edit the
+ * user is trying to save. The user picks a side:
+ *   Keep mine  → force-write with a client_updated_at 1ms past server
+ *   Use server → discard the in-flight edit, snap to server state
+ *   Cancel     → close modal, leave the edit form open for manual choice
+ */
+var _conflictState = null; // {editId, localPayload, serverRow, serverTs}
+function openConflictModal(editId, localPayload, serverRow){
+  var serverSub = normalizeSub(serverRow);
+  var serverTs = serverSub._clientUpdatedAt || serverRow.updated_at || null;
+  _conflictState = { editId: editId, localPayload: localPayload, serverRow: serverRow, serverSub: serverSub, serverTs: serverTs };
+  renderConflictDiff(localPayload, serverSub);
+  var meta = document.getElementById('conflict-modal-meta');
+  if(meta){
+    meta.textContent = serverTs
+      ? 'Server last saved '+new Date(serverTs).toLocaleString()+'.'
+      : 'Server has a newer version of this item.';
+  }
+  document.getElementById('conflict-modal').classList.add('open');
+}
+function closeConflictModal(){
+  _conflictState = null;
+  document.getElementById('conflict-modal').classList.remove('open');
+}
+function renderConflictDiff(local, serverSub){
+  // Render the two columns. We only show the most-likely-to-differ fields
+  // to keep the diff scannable; fall back to "—" for empties.
+  function row(label, a, b){
+    return '<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px dashed var(--muted2)">'+
+      '<div style="flex:0 0 90px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px">'+esc(label)+'</div>'+
+      '<div style="flex:1;min-width:0;word-break:break-word">'+esc(a == null || a === '' ? '—' : String(a))+'</div>'+
+      '<div style="flex:1;min-width:0;word-break:break-word">'+esc(b == null || b === '' ? '—' : String(b))+'</div>'+
+      '</div>';
+  }
+  var localSc = local.currency || 'USD';
+  var serverSc = serverSub.currency || 'USD';
+  var localPrice = (local.priceMode === 'fixed' || !local.priceMode)
+    ? (localSc + ' ' + parseFloat(local.price).toFixed(2))
+    : (localSc + ' ' + parseFloat(local.price).toFixed(2) + ' ('+(local.priceMode||'fixed')+(local.actualPrice != null ? ', used '+parseFloat(local.actualPrice).toFixed(2) : '')+')');
+  var serverPrice = (serverSub.priceMode === 'fixed')
+    ? (serverSc + ' ' + parseFloat(serverSub.price).toFixed(2))
+    : (serverSc + ' ' + parseFloat(serverSub.price).toFixed(2) + ' ('+serverSub.priceMode+(serverSub.actualPrice != null ? ', used '+parseFloat(serverSub.actualPrice).toFixed(2) : '')+')');
+  var html = row('Name', local.name, serverSub.name)
+    + row('Price', localPrice, serverPrice)
+    + row('Cycle', local.cycle, serverSub.cycle)
+    + row('Next date', local.nextDate, serverSub.nextDate)
+    + row('Category', local.category, serverSub.category)
+    + row('Account', local.account, serverSub.account)
+    + row('Currency', localSc, serverSc);
+  var mine = document.getElementById('conflict-mine');
+  var srv = document.getElementById('conflict-server');
+  if(mine) mine.innerHTML = html;
+  if(srv){
+    // Rebuild server column with the right values: same html structure
+    // but pulled from serverSub. Easiest: re-render with swapped args.
+    var serverHtml = row('Name', serverSub.name, local.name)
+      + row('Price', serverPrice, localPrice)
+      + row('Cycle', serverSub.cycle, local.cycle)
+      + row('Next date', serverSub.nextDate, local.nextDate)
+      + row('Category', serverSub.category, local.category)
+      + row('Account', serverSub.account, local.account)
+      + row('Currency', serverSc, localSc);
+    srv.innerHTML = serverHtml;
+  }
+}
+async function keepMyVersion(){
+  if(!_conflictState) return;
+  var state = _conflictState;
+  var btn = document.getElementById('conflict-keep-mine-btn');
+  setButtonBusy(btn ? btn.id : 'conflict-keep-mine-btn', true, 'Saving…', 'Keep mine');
+  try {
+    // Force-win by stamping client_updated_at 1ms past the server row.
+    // toDbPayload re-uses sub._clientUpdatedAt if we set it, so we set
+    // it on the payload itself before calling toDbPayload.
+    var serverTsMs = state.serverTs ? new Date(state.serverTs).getTime() : Date.now();
+    state.localPayload._clientUpdatedAt = new Date(serverTsMs + 1).toISOString();
+    var editPayload = toDbPayload(state.localPayload);
+    var res = await supabaseClient.from('subscriptions')
+      .update(editPayload)
+      .eq('id', state.editId)
+      .select('*')
+      .single();
+    if(res.error) throw res.error;
+    subs = subs.map(function(sub){ return sub.id===state.editId ? normalizeSub(res.data) : sub; });
+    closeConflictModal();
+    document.getElementById('add-modal').classList.remove('open');
+    renderAll();
+    renderCalendar();
+    toast('✓ '+state.localPayload.name+' updated (your version kept)', 'success');
+    resetAddForm();
+  } catch (error) {
+    console.error('keepMyVersion failed', error);
+    toast('Could not save your version: ' + (error && (error.message || error.details || error.hint) ? (error.message || error.details || error.hint) : 'unknown error'), 'error');
+  } finally {
+    setButtonBusy(btn ? btn.id : 'conflict-keep-mine-btn', false, 'Saving…', 'Keep mine');
+  }
+}
+function useServerVersion(){
+  if(!_conflictState) return;
+  var state = _conflictState;
+  // Snap the in-memory sub to the server row.
+  subs = subs.map(function(sub){ return sub.id===state.editId ? state.serverSub : sub; });
+  closeConflictModal();
+  // Re-open the edit form pre-populated with the server version so the
+  // user can re-apply their pending changes against the freshest base.
+  openEditModal(state.editId);
+  toast('Loaded server version — re-apply your changes if needed', 'info');
+}
+
+/* v1.0 freshness check — runs after a cloud load. Walks the local
+ * localStorage cache (loadLocalSubs) and compares each row's
+ * client_updated_at against the freshly-loaded server row. If the server
+ * is > 5 minutes newer, surface a single "Server has updates" toast with
+ * a clickable action that opens the conflict modal pre-populated. We
+ * dedupe to one toast per load to avoid spamming when many rows are
+ * stale at once.
+ */
+var _freshnessToastShown = false;
+function _checkSyncFreshness(){
+  if(_freshnessToastShown) return;
+  if(typeof loadLocalSubs !== 'function') return;
+  var local = loadLocalSubs();
+  if(!local.length) return;
+  var byId = {};
+  local.forEach(function(s){ if(s && s.id) byId[s.id] = s; });
+  var stale = null;
+  var thresholdMs = 5 * 60 * 1000;
+  var nowMs = Date.now();
+  for(var i=0; i<subs.length && !stale; i++){
+    var serverSub = subs[i];
+    var l = byId[serverSub.id];
+    if(!l) continue;
+    var serverTs = serverSub._clientUpdatedAt ? new Date(serverSub._clientUpdatedAt).getTime() : null;
+    var localTs = l._clientUpdatedAt ? new Date(l._clientUpdatedAt).getTime() : null;
+    if(serverTs && (!localTs || (serverTs - localTs) > thresholdMs) && (nowMs - serverTs) < 7 * 24 * 60 * 60 * 1000){
+      stale = { sub: serverSub, local: l };
+    }
+  }
+  if(!stale) return;
+  _freshnessToastShown = true;
+  // Render a clickable toast: we reuse the standard toast element but
+  // also wire a one-shot click handler that opens the conflict modal.
+  var toastEl = document.getElementById('toast');
+  if(toastEl){
+    toastEl.textContent = '↻ '+stale.sub.name+' has newer server changes — click to review';
+    toastEl.className = 'toast show info clickable';
+    toastEl.style.cursor = 'pointer';
+    toastEl.onclick = function(){
+      toastEl.className = 'toast';
+      toastEl.style.cursor = '';
+      toastEl.onclick = null;
+      // Pre-populate the conflict modal: pretend the user just hit
+      // "Save" with the local-cached payload, and we discovered the
+      // server is newer. Pass the normalized server sub as the
+      // "fresher row" — normalizeSub is idempotent on its own output.
+      openConflictModal(stale.sub.id, lToPayload(stale.local), stale.sub);
+      _freshnessToastShown = false;
+    };
+    setTimeout(function(){
+      if(toastEl.onclick){
+        toastEl.className = 'toast';
+        toastEl.style.cursor = '';
+        toastEl.onclick = null;
+        _freshnessToastShown = false;
+      }
+    }, 8000);
+  } else {
+    toast('↻ "'+stale.sub.name+'" has newer server changes', 'info');
+  }
+}
+// Convert a cached local sub shape to a save-payload object. The conflict
+// modal only needs the user-editable fields; the server sub id is reused
+// from the cached row.
+function lToPayload(s){
+  return {
+    name: s.name,
+    price: s.price,
+    priceMode: s.priceMode || 'fixed',
+    actualPrice: s.actualPrice,
+    priceNote: s.priceNote || '',
+    currency: s.currency || 'USD',
+    cycle: s.cycle || 'monthly',
+    nextDate: s.nextDate || '',
+    category: s.category || 'Other',
+    emoji: s.emoji || '📺',
+    account: s.account || ''
+  };
+}
 function selPaywallPlan(el){
   var plans = document.querySelectorAll('.paywall-plan[data-plan="monthly"], .paywall-plan[data-plan="yearly"]');
   plans.forEach(function(p){ p.classList.remove('is-selected'); });
@@ -3572,6 +3822,13 @@ async function initAuth(){
   renderAuthState();
   await loadSubscriptions();
   setLoadingState(false);
+  // v1.0 onboarding: first-time users (no subs, not yet onboarded) get the
+  // 3-step modal. Triggered from inside initAuth so it runs once after the
+  // initial loadSubscriptions() resolves, but not on subsequent
+  // onAuthStateChange re-renders (which don't go through this block).
+  if(subs.length === 0 && !isOnboarded() && !document.getElementById('onboarding-modal').classList.contains('open')){
+    openOnboarding();
+  }
   supabaseClient.auth.onAuthStateChange(function(_event, session){
     currentUser = session ? session.user : null;
     currentPlanCache = null;
